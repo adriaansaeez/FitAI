@@ -58,7 +58,7 @@ export default function HomePage() {
         <p className="banner banner-info">Sin referencia personal; confianza limitada.</p>
       ) : null}
 
-      <SummaryCards entry={selectedEntry} sample={selectedSample} baseline={sim.baseline} />
+      <SummaryCards entry={selectedEntry} sample={selectedSample} />
 
       <SynchronizedCharts
         samples={sim.samples}
