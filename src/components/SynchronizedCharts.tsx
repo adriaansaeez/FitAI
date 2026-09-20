@@ -27,7 +27,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { DecisionAction, RunningSample } from "@/domain/types";
+import type { DecisionAction, PaceTargetSecPerKm, RunningSample } from "@/domain/types";
 import type { AthleteBaseline } from "@/domain/metrics";
 import type { DecisionEntry } from "./useRaceSimulation";
 import {
@@ -43,8 +43,8 @@ const AXIS_TICK = { fontSize: 10, fill: "#555" } as const;
 interface SeriesPoint {
   second: number;
   pace: number | null;
-  targetMin: number;
-  targetMax: number;
+  targetMin: number | null;
+  targetMax: number | null;
   hr: number | null;
   elevation: number;
   grade: number;
@@ -129,6 +129,8 @@ export function SynchronizedCharts({
   entries,
   selectedSecond,
   onSelect,
+  targetPaceSecPerKm,
+  totalSeconds,
 }: {
   samples: RunningSample[];
   baseline: AthleteBaseline;
@@ -136,21 +138,46 @@ export function SynchronizedCharts({
   entries: DecisionEntry[];
   selectedSecond: number;
   onSelect: (second: number) => void;
+  /** Published pace target; null in real-race mode (no verifiable target). */
+  targetPaceSecPerKm: PaceTargetSecPerKm | null;
+  /** Session length in seconds (equals samples.length; one sample per second). */
+  totalSeconds: number;
 }) {
   const series = useMemo<SeriesPoint[]>(
     () =>
       samples.map((sample) => ({
         second: sample.second,
         pace: sample.paceSecPerKm,
-        targetMin: 315,
-        targetMax: 330,
+        targetMin: targetPaceSecPerKm?.min ?? null,
+        targetMax: targetPaceSecPerKm?.max ?? null,
         hr: sample.heartRateBpm,
         elevation: sample.elevationM,
         grade: sample.gradePct,
         rpe: sample.rpe ?? null,
       })),
-    [samples],
+    [samples, targetPaceSecPerKm],
   );
+
+  // Session-length X domain (spec: real-race validation, item 4). Guard so
+  // recharts never receives an empty/invalid [1, 0] domain.
+  const xDomain = useMemo<[number, number]>(
+    () => [1, Math.max(totalSeconds, 1)],
+    [totalSeconds],
+  );
+
+  // Pace Y range from the session's actual pace samples with ±10 s/km padding,
+  // floored at a sensible lower bound; fixed fallback when there is no data.
+  const paceYDomain = useMemo<[number, number]>(() => {
+    const paces = samples
+      .map((sample) => sample.paceSecPerKm)
+      .filter((pace): pace is number => pace !== null);
+    if (paces.length === 0) {
+      return [290, 370];
+    }
+    const min = Math.max(60, Math.min(...paces) - 10);
+    const max = Math.max(min + 1, Math.max(...paces) + 10);
+    return [min, max];
+  }, [samples]);
 
   const decisionSeries = useMemo<DecisionPoint[]>(
     () =>
@@ -195,10 +222,17 @@ export function SynchronizedCharts({
         <ResponsiveContainer width="100%" height={150}>
           <ComposedChart data={series} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="#eee" />
-            <XAxis dataKey="second" type="number" domain={[1, 600]} tick={AXIS_TICK} tickFormatter={formatSecondTick} />
-            <YAxis domain={[290, 370]} tick={AXIS_TICK} width={38} tickFormatter={(v: number) => formatSecondTick(v).replace(" ", "")} />
+            <XAxis dataKey="second" type="number" domain={xDomain} tick={AXIS_TICK} tickFormatter={formatSecondTick} />
+            <YAxis domain={paceYDomain} tick={AXIS_TICK} width={38} tickFormatter={(v: number) => formatSecondTick(v).replace(" ", "")} />
             <Tooltip labelFormatter={(label) => `Segundo ${String(label)}`} formatter={(value) => formatPace(Number(value))} />
-            <ReferenceArea y1={315} y2={330} fill="#dfe7df" fillOpacity={0.6} />
+            {targetPaceSecPerKm !== null ? (
+              <ReferenceArea
+                y1={targetPaceSecPerKm.min}
+                y2={targetPaceSecPerKm.max}
+                fill="#dfe7df"
+                fillOpacity={0.6}
+              />
+            ) : null}
             <ReferenceLine x={selectedSecond} {...cursorProps} />
             <Line type="monotone" dataKey="pace" stroke="#2b4a6f" dot={false} isAnimationActive={false} />
           </ComposedChart>
@@ -209,7 +243,7 @@ export function SynchronizedCharts({
         <ResponsiveContainer width="100%" height={150}>
           <ComposedChart data={series} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="#eee" />
-            <XAxis dataKey="second" type="number" domain={[1, 600]} tick={AXIS_TICK} tickFormatter={formatSecondTick} />
+            <XAxis dataKey="second" type="number" domain={xDomain} tick={AXIS_TICK} tickFormatter={formatSecondTick} />
             <YAxis domain={["auto", "auto"]} tick={AXIS_TICK} width={38} />
             <Tooltip labelFormatter={(label) => `Segundo ${String(label)}`} formatter={(value) => `${Math.round(Number(value))} ppm`} />
             {hasHrReference ? (
@@ -230,7 +264,7 @@ export function SynchronizedCharts({
         <ResponsiveContainer width="100%" height={150}>
           <ComposedChart data={series} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="#eee" />
-            <XAxis dataKey="second" type="number" domain={[1, 600]} tick={AXIS_TICK} tickFormatter={formatSecondTick} />
+            <XAxis dataKey="second" type="number" domain={xDomain} tick={AXIS_TICK} tickFormatter={formatSecondTick} />
             <YAxis yAxisId="elev" tick={AXIS_TICK} width={38} />
             <YAxis yAxisId="grade" orientation="right" tick={AXIS_TICK} width={38} />
             <Tooltip labelFormatter={(label) => `Segundo ${String(label)}`} />
@@ -246,7 +280,7 @@ export function SynchronizedCharts({
           {hasRpe ? (
             <ComposedChart data={series} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
               <CartesianGrid stroke="#eee" />
-              <XAxis dataKey="second" type="number" domain={[1, 600]} tick={AXIS_TICK} tickFormatter={formatSecondTick} />
+              <XAxis dataKey="second" type="number" domain={xDomain} tick={AXIS_TICK} tickFormatter={formatSecondTick} />
               <YAxis domain={[0, 10]} tick={AXIS_TICK} width={38} />
               <Tooltip labelFormatter={(label) => `Segundo ${String(label)}`} />
               <ReferenceLine x={selectedSecond} {...cursorProps} />
@@ -262,7 +296,7 @@ export function SynchronizedCharts({
         <ResponsiveContainer width="100%" height={170}>
           <ComposedChart data={decisionSeries} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="#eee" />
-            <XAxis dataKey="second" type="number" domain={[1, 600]} tick={AXIS_TICK} tickFormatter={formatSecondTick} />
+            <XAxis dataKey="second" type="number" domain={xDomain} tick={AXIS_TICK} tickFormatter={formatSecondTick} />
             <YAxis
               domain={[-1, 4]}
               ticks={[-1, 0, 1, 2, 3, 4]}
@@ -307,7 +341,7 @@ export function SynchronizedCharts({
           {historyEstablished ? (
             <ComposedChart data={segmentSeries} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
               <CartesianGrid stroke="#eee" />
-              <XAxis dataKey="second" type="number" domain={[1, 600]} tick={AXIS_TICK} tickFormatter={formatSecondTick} />
+              <XAxis dataKey="second" type="number" domain={xDomain} tick={AXIS_TICK} tickFormatter={formatSecondTick} />
               <YAxis domain={["auto", "auto"]} tick={AXIS_TICK} width={38} tickFormatter={(v: number) => formatSecondTick(v).replace(" ", "")} />
               <Tooltip labelFormatter={(label) => `Segmento desde el segundo ${String(label)}`} formatter={(value) => formatPace(Number(value))} />
               <ReferenceLine x={selectedSecond} {...cursorProps} />

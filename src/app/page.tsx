@@ -15,6 +15,7 @@ import { ControlsBar } from "@/components/ControlsBar";
 import { DecisionTable } from "@/components/DecisionTable";
 import { SummaryCards } from "@/components/SummaryCards";
 import { useRaceSimulation } from "@/components/useRaceSimulation";
+import { SCENARIOS } from "@/simulation/scenarios";
 
 const SynchronizedCharts = dynamic(
   () => import("@/components/SynchronizedCharts").then((mod) => mod.SynchronizedCharts),
@@ -67,6 +68,13 @@ export default function HomePage() {
         entries={sim.entries}
         selectedSecond={selectedSecond}
         onSelect={sim.selectSecond}
+        targetPaceSecPerKm={
+          // Real-race sessions have no published, verifiable pace target.
+          sim.session.source.kind === "synthetic-scenario"
+            ? SCENARIOS[sim.scenarioId].targetPaceSecPerKm
+            : null
+        }
+        totalSeconds={sim.session.totalSeconds}
       />
 
       <DecisionTable
