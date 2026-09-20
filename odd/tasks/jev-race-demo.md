@@ -17,7 +17,7 @@ TypeSafe SDK contract (verified 2026-09-20, docs v0.6.0):
 ## Tasks
 
 - [x] T1: Scaffold Next.js (App Router) + TS + Vitest + Recharts + Zod; domain types + simulation engine (seeded route, 5 scenarios) + athlete history generator (0/1/3/5/10 sessions, comparability filter) + metric engine (smoothing windows, hr trend, history baseline/median)
-- [ ] T2: Safety policy + DecisionProvider interface + MockDecisionProvider (deterministic) + composer (guardas, confidence thresholds, cooldown, limits) + all 10 mandatory domain tests green
+- [x] T2: Safety policy + DecisionProvider interface + MockDecisionProvider (deterministic) + composer (guardas, confidence thresholds, cooldown, limits) + all 10 mandatory domain tests green
 - [ ] T3: JevDecisionProvider (server-only, 4 questions per call, API route, timeout/error fallback to maintain) + provider selection (mock without key, "Modo simulación")
 - [ ] T4: UI single page (controls, summary cards, synchronized charts with cursor, decision table, audit panel, playback 1x/5x/20x) + README (install, env, controls, medical limits)
 - [ ] T5: Full test run, build check, acceptance walkthrough per scenario, close-out
@@ -27,3 +27,4 @@ Constraints (from spec):
 
 ## Evidence
 - T1: commit 8a2b79c-ish (feat: scaffold Next.js app with domain and simulation layers) — 69 tests green, tsc clean. Pending: .env.example blocked by .env* safety policy (agent writes denied); document TYPESAFE_API_KEY in README instead, user may create file manually.
+- T2: safety/composer/mock provider + 10 mandatory tests (130 tests green, tsc clean). Fail-closed fix in composer (undefined block denies increase). Note: T2 worker stalled twice (240s stall, 20m timeout) leaving source-only partial work; parent verified partial state and delegated the test battery separately.
