@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 import { composeDecision, decideSecond } from "../src/domain/composer";
+import { decideRequestBodySchema } from "../src/app/api/decide/handler";
 import {
   MockDecisionProvider,
   MOCK_CONFIDENCE,
@@ -23,6 +24,22 @@ import {
 
 const SEED = 42;
 const HISTORY_SEED = 7;
+
+/** Provider that always proposes a high-confidence, low-risk increase. */
+function increaseProvider(): DecisionProvider {
+  return {
+    async decide(): Promise<ProviderResult> {
+      return {
+        action: "increase_gently",
+        actionConfidence: 0.95,
+        disproportionateEffortProbability: 0.05,
+        contextExplanation: "normal_variation",
+        interpretability: { score: 2, confidence: 0.9, probabilities: {} },
+        source: "mock",
+      };
+    },
+  };
+}
 
 /** Base context of a safe easy second where an increase would be eligible. */
 function safeEasyContext(historyMaturity: string): Record<string, unknown> {
@@ -334,5 +351,57 @@ describe("spec test 10: provider failure does not intensify", () => {
     expect(seen[0]?.context["block"]).toBe("easy");
     expect(trace.action).toBe("maintain");
     expect(trace.reasonCodes).toContain("provider_unavailable");
+  });
+});
+
+describe("fail-closed increase guard (Kona 2022): no increase without target/history", () => {
+  const samples = generateScenarioSamples("easy-under-target", SEED);
+  const target = SCENARIOS["easy-under-target"].targetPaceSecPerKm;
+
+  it("decideSecond denies a provider-proposed increase when no pace target is given", async () => {
+    const trace = await decideSecond({
+      samples: samples.slice(0, 120),
+      block: "easy",
+      provider: increaseProvider(),
+    });
+    expect(trace.action).toBe("maintain");
+    expect(trace.source).toBe("composer");
+    expect(trace.reasonCodes).toContain("increase_without_target");
+  });
+
+  it("decideSecond denies the increase with a target but zero comparable history", async () => {
+    const trace = await decideSecond({
+      samples: samples.slice(0, 120),
+      block: "easy",
+      targetPaceSecPerKm: target,
+      comparableHistoryCount: 0,
+      provider: increaseProvider(),
+    });
+    expect(trace.action).toBe("maintain");
+    expect(trace.reasonCodes).toContain("increase_without_target");
+  });
+
+  it("decideSecond allows the increase with a target and comparable history", async () => {
+    const trace = await decideSecond({
+      samples: samples.slice(0, 120),
+      block: "easy",
+      targetPaceSecPerKm: target,
+      comparableHistoryCount: 1,
+      provider: increaseProvider(),
+    });
+    expect(trace.action).toBe("increase_gently");
+    expect(trace.reasonCodes).not.toContain("increase_without_target");
+  });
+
+  it("the decide request schema accepts a body without paceTargetSecPerKm", () => {
+    const parsed = decideRequestBodySchema.safeParse({
+      sample: samples[samples.length - 1],
+      block: "easy",
+      recentSamples: [],
+      historyCount: 5,
+      previousDecision: null,
+      callJev: false,
+    });
+    expect(parsed.success).toBe(true);
   });
 });

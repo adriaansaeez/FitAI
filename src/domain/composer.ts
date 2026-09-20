@@ -17,6 +17,7 @@ export const COMPOSER_REASON_CODES = {
   lowInterpretability: "low_interpretability",
   increaseNotEasyBlock: "increase_not_easy_block",
   increaseBlockedBySafety: "increase_blocked_by_safety",
+  increaseWithoutTarget: "increase_without_target",
   disproportionateEffortRisk: "disproportionate_effort_risk",
   cooldownNoOppositeChange: "cooldown_no_opposite_change",
   recoverReevaluationPending: "recover_reevaluation_pending",
@@ -87,9 +88,20 @@ function probabilitiesToStringKeys(
   return Object.fromEntries(entries);
 }
 
-function hasIncreaseBlockers(safety: SafetyResult, block: TrainingBlock | undefined): boolean {
+function hasIncreaseBlockers(
+  safety: SafetyResult,
+  block: TrainingBlock | undefined,
+  hasTarget: boolean,
+  comparableHistoryCount: number,
+): boolean {
   // An absent block must fail closed: only an explicit "easy" block may increase.
   if (block === undefined || block !== "easy") {
+    return true;
+  }
+  // Fail closed (Kona 2022): without a verifiable pace target or without any
+  // comparable history there is no basis for an increase, whatever the
+  // provider proposes.
+  if (!hasTarget || comparableHistoryCount <= 0) {
     return true;
   }
   return !safety.mayIncreaseIntensity;
@@ -104,10 +116,12 @@ function hasDisproportionateRisk(providerResult: ProviderResult): boolean {
  * Pure composer: combines sample, metrics, safety, provider result and the
  * previous decision into the final trace for this second.
  *
- * Deviation from the spec signature: an optional trailing `block` parameter
- * was added so the "increase only in easy" rule can be enforced without
- * threading block state through DerivedMetrics (immutable in this task).
- * When block is undefined, increases are conservatively denied.
+ * Deviation from the spec signature: optional trailing parameters were added
+ * so the "increase only in easy" rule and the fail-closed target/history guard
+ * can be enforced without threading block state through DerivedMetrics
+ * (immutable in this task). When block is undefined, increases are
+ * conservatively denied; the same applies when targetPaceSecPerKm is omitted
+ * or comparableHistoryCount is 0.
  */
 export function composeDecision(
   sample: RunningSample,
@@ -116,6 +130,7 @@ export function composeDecision(
   providerResult: ProviderResult | null,
   previousDecision: DecisionTrace | null,
   block?: TrainingBlock,
+  targetPaceSecPerKm?: PaceTargetSecPerKm,
 ): DecisionTrace {
   const reasonCodes: string[] = safety.reasonCodes.map(mapSafetyReason);
 
@@ -218,14 +233,31 @@ export function composeDecision(
     composerSource = "composer";
   }
 
-  // 8. increase_gently validity: easy block, safety allows, low risk.
+  // 8. increase_gently validity: easy block, safety allows, low risk, and a
+  // fail-closed target/history guard (never increase without them).
   if (proposedAction === "increase_gently") {
-    if (hasIncreaseBlockers(safety, block)) {
-      reasonCodes.push(
-        block !== undefined && block !== "easy"
-          ? COMPOSER_REASON_CODES.increaseNotEasyBlock
-          : COMPOSER_REASON_CODES.increaseBlockedBySafety,
-      );
+    const hasTarget = targetPaceSecPerKm !== undefined;
+    if (
+      hasIncreaseBlockers(
+        safety,
+        block,
+        hasTarget,
+        metrics.comparableHistoryCount,
+      )
+    ) {
+      if (block !== "easy") {
+        // Absent block keeps the original conservative code; explicit non-easy
+        // blocks report the block reason.
+        reasonCodes.push(
+          block !== undefined
+            ? COMPOSER_REASON_CODES.increaseNotEasyBlock
+            : COMPOSER_REASON_CODES.increaseBlockedBySafety,
+        );
+      } else if (!hasTarget || metrics.comparableHistoryCount <= 0) {
+        reasonCodes.push(COMPOSER_REASON_CODES.increaseWithoutTarget);
+      } else {
+        reasonCodes.push(COMPOSER_REASON_CODES.increaseBlockedBySafety);
+      }
       proposedAction = "maintain";
       composerSource = "composer";
     } else if (hasDisproportionateRisk(providerResult)) {
@@ -389,5 +421,6 @@ export async function decideSecond(input: DecideSecondInput): Promise<DecisionTr
     providerResult,
     previousDecision ?? null,
     block,
+    input.targetPaceSecPerKm,
   );
 }

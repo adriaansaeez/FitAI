@@ -32,7 +32,9 @@ export const MAX_RECENT_SAMPLES = 120;
 export const decideRequestBodySchema = z.object({
   sample: runningSampleSchema,
   block: trainingBlockSchema,
-  paceTargetSecPerKm: z.object({ min: z.number(), max: z.number() }),
+  /** Optional since the fail-closed guard (Kona 2022): increases are denied
+   *  when absent, but maintain/decrease/recover remain valid outputs. */
+  paceTargetSecPerKm: z.object({ min: z.number(), max: z.number() }).optional(),
   /** Samples BEFORE `sample`, oldest first (exclusive of the current second). */
   recentSamples: z.array(runningSampleSchema).max(MAX_RECENT_SAMPLES),
   historyCount: z.union([

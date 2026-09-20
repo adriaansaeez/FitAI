@@ -18,6 +18,7 @@ import type { ProviderResult } from "../src/services/provider";
 import type {
   DecisionTrace,
   DerivedMetrics,
+  PaceTargetSecPerKm,
   RunningSample,
   SafetyResult,
   TrainingBlock,
@@ -103,7 +104,13 @@ function compose(overrides: {
   providerResult?: ProviderResult | null;
   previous?: DecisionTrace | null;
   block?: TrainingBlock;
+  /** null = explicitly no pace target (fail-closed guard); default = valid target. */
+  targetPaceSecPerKm?: PaceTargetSecPerKm | null;
 }): DecisionTrace {
+  const targetPaceSecPerKm =
+    overrides.targetPaceSecPerKm === null
+      ? undefined
+      : (overrides.targetPaceSecPerKm ?? { min: 320, max: 340 });
   return composeDecision(
     sample(overrides.sample ?? {}),
     metrics(overrides.metrics ?? {}),
@@ -111,6 +118,7 @@ function compose(overrides: {
     overrides.providerResult !== undefined ? overrides.providerResult : providerResult(),
     overrides.previous !== undefined ? overrides.previous : null,
     overrides.block ?? "easy",
+    targetPaceSecPerKm,
   );
 }
 
@@ -334,6 +342,48 @@ describe("composer guard edges", () => {
     expect(result.action).toBe("insufficient_data");
     expect(result.source).toBe("safety");
     expect(result.reasonCodes).toContain(COMPOSER_REASON_CODES.lowSignalQuality);
+  });
+});
+
+describe("fail-closed increase guard: verifiable target and comparable history", () => {
+  it("a proposed increase without a pace target is denied with increase_without_target", () => {
+    const result = compose({ targetPaceSecPerKm: null });
+    expect(result.action).toBe("maintain");
+    expect(result.source).toBe("composer");
+    expect(result.reasonCodes).toContain(COMPOSER_REASON_CODES.increaseWithoutTarget);
+    expect(result.explanationKey).toBe(
+      `decision.maintain.${COMPOSER_REASON_CODES.increaseWithoutTarget}`,
+    );
+  });
+
+  it("a proposed increase with a target but zero comparable history is denied too", () => {
+    const result = compose({
+      metrics: { comparableHistoryCount: 0, historyMaturity: "none" },
+    });
+    expect(result.action).toBe("maintain");
+    expect(result.reasonCodes).toContain(COMPOSER_REASON_CODES.increaseWithoutTarget);
+  });
+
+  it("with a target and at least one comparable session the increase is allowed as before", () => {
+    const result = compose({
+      metrics: { comparableHistoryCount: 1, historyMaturity: "early" },
+    });
+    expect(result.action).toBe("increase_gently");
+    expect(result.reasonCodes).not.toContain(COMPOSER_REASON_CODES.increaseWithoutTarget);
+  });
+
+  it("a non-easy block still reports increase_not_easy_block (reason precedence)", () => {
+    const result = compose({ block: "tempo", targetPaceSecPerKm: null });
+    expect(result.action).toBe("maintain");
+    expect(result.reasonCodes).toContain(COMPOSER_REASON_CODES.increaseNotEasyBlock);
+    expect(result.reasonCodes).not.toContain(COMPOSER_REASON_CODES.increaseWithoutTarget);
+  });
+
+  it("a safety denial with target and history still reports increase_blocked_by_safety", () => {
+    const result = compose({ safety: { mayIncreaseIntensity: false } });
+    expect(result.action).toBe("maintain");
+    expect(result.reasonCodes).toContain(COMPOSER_REASON_CODES.increaseBlockedBySafety);
+    expect(result.reasonCodes).not.toContain(COMPOSER_REASON_CODES.increaseWithoutTarget);
   });
 });
 
