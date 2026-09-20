@@ -3,12 +3,14 @@
 /**
  * Audit panel for the selected second: derived metrics, safety guard results,
  * the four Jev questions with probabilities when present in the trace, the
- * final rule, and the "decisión reutilizada" mark.
+ * final rule, the "decisión reutilizada" mark, and the real-race data origin
+ * card (spec: real-race validation, item 6).
  */
 
 import type { AthleteBaseline } from "@/domain/metrics";
-import type { DecisionTrace, RunningSample } from "@/domain/types";
+import type { RunningSample } from "@/domain/types";
 import type { DecisionEntry } from "./useRaceSimulation";
+import type { DataSource, RealRaceWindowPayload } from "./useRaceSimulation";
 import {
   ACTION_COLORS,
   ACTION_LABELS,
@@ -22,11 +24,52 @@ import {
   reasonLabel,
 } from "./labels";
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({
+  label,
+  value,
+  title,
+}: {
+  label: string;
+  value: string;
+  title?: string;
+}) {
   return (
     <div className="audit-metric">
       <dt>{label}</dt>
-      <dd>{value}</dd>
+      <dd title={title}>{value}</dd>
+    </div>
+  );
+}
+
+/** SHA-256 rendered truncated; the full hash stays in the title attribute. */
+function formatSha256(sha256: string): string {
+  return `${sha256.slice(0, 12)}…`;
+}
+
+function RealOriginCard({ realWindow }: { realWindow: RealRaceWindowPayload }) {
+  return (
+    <div className="audit-card">
+      <h3>Origen de datos</h3>
+      <dl className="audit-metrics">
+        <Metric label="Atleta" value={realWindow.source.athlete} />
+        <Metric label="Evento" value={realWindow.source.event} />
+        <Metric label="Licencia" value={realWindow.source.license} />
+        <Metric
+          label="SHA-256"
+          value={formatSha256(realWindow.source.sha256)}
+          title={realWindow.source.sha256}
+        />
+        <Metric label="Semilla" value={String(realWindow.seed)} />
+        <Metric label="Índice fuente inicial" value={String(realWindow.startSourceIndex)} />
+        <Metric label="Preroll" value={`${realWindow.prerollSeconds} s`} />
+        <Metric label="Duración visible" value={`${realWindow.visibleDurationSeconds} s`} />
+        <Metric
+          label="Ventana"
+          value={`${realWindow.startTimestamp} → ${realWindow.endTimestamp}`}
+        />
+      </dl>
+      <p className="note">Cadencia: {realWindow.cadenceSemantics}</p>
+      <p className="note">Síntomas: {realWindow.symptomsSource}</p>
     </div>
   );
 }
@@ -34,11 +77,16 @@ function Metric({ label, value }: { label: string; value: string }) {
 export function AuditPanel({
   entry,
   sample,
-  baseline,
+  baseline: _baseline,
+  dataSource = "synthetic",
+  realWindow = null,
 }: {
   entry: DecisionEntry | null;
   sample: RunningSample | null;
+  /** Unused today; kept so the panel API stays stable for future audit cards. */
   baseline: AthleteBaseline;
+  dataSource?: DataSource;
+  realWindow?: RealRaceWindowPayload | null;
 }) {
   if (entry === null || sample === null) {
     return (
@@ -163,6 +211,15 @@ export function AuditPanel({
             ))}
           </ul>
         </div>
+
+        {dataSource === "real" && realWindow !== null ? (
+          <RealOriginCard realWindow={realWindow} />
+        ) : (
+          <div className="audit-card">
+            <h3>Origen de datos</h3>
+            <p className="note">Escenario sintético</p>
+          </div>
+        )}
       </div>
     </section>
   );

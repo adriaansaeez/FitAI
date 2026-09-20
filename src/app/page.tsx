@@ -15,6 +15,7 @@ import { ControlsBar } from "@/components/ControlsBar";
 import { DecisionTable } from "@/components/DecisionTable";
 import { SummaryCards } from "@/components/SummaryCards";
 import { useRaceSimulation } from "@/components/useRaceSimulation";
+import { REAL_MODE_ATTRIBUTION } from "@/components/labels";
 import { SCENARIOS } from "@/simulation/scenarios";
 
 const SynchronizedCharts = dynamic(
@@ -50,6 +51,15 @@ export default function HomePage() {
 
       <ControlsBar sim={sim} />
 
+      {sim.dataSource === "real" ? (
+        <p className="banner banner-info">{REAL_MODE_ATTRIBUTION}</p>
+      ) : null}
+      {sim.realStatus === "error" ? (
+        <p className="banner banner-warning" role="alert">
+          No se pudo cargar la telemetría real. Si falta el CSV fuente, ejecuta{" "}
+          <code>node scripts/download-kona-2022.mjs</code> y reintenta.
+        </p>
+      ) : null}
       {sim.failureNote !== null ? (
         <p className="banner banner-warning" role="alert">
           {sim.failureNote}
@@ -84,7 +94,13 @@ export default function HomePage() {
         onSelect={sim.selectSecond}
       />
 
-      <AuditPanel entry={selectedEntry} sample={selectedSample} baseline={sim.baseline} />
+      <AuditPanel
+        entry={selectedEntry}
+        sample={selectedSample}
+        baseline={sim.baseline}
+        dataSource={sim.dataSource}
+        realWindow={sim.realWindow}
+      />
 
       <footer className="page-footer">
         <p>

@@ -11,6 +11,7 @@ import {
   renderDecisionMessage,
 } from "@/domain/messageTemplates";
 import type { ScenarioId } from "@/simulation/scenarios";
+import type { DataSource } from "./useRaceSimulation";
 
 export const ACTION_LABELS: Record<DecisionAction, string> = {
   increase_gently: "Subir suave",
@@ -77,6 +78,25 @@ export const SCENARIO_LABELS: Record<ScenarioId, string> = {
   "poor-signal": "Señal pobre",
   "symptom-stop": "Síntoma → detener",
 };
+
+/**
+ * Data source selector: the synthetic scenarios vs the real Kona 2022 race
+ * telemetry (spec: real-race validation, item 8).
+ */
+export const SOURCE_KIND_LABELS: Record<DataSource, string> = {
+  synthetic: "Escenario sintético",
+  real: "Carrera real: Kona 2022 — Gustav Iden",
+};
+
+/** Static note shown instead of the interval select in real mode (60 s cadence). */
+export const REAL_MODE_INTERVAL_LABEL = "Intervalo de evaluación: 60 s (modo real)";
+
+/** Note under the disabled history select in real mode. */
+export const REAL_MODE_HISTORY_NOTE = "Historial no publicado";
+
+/** Permanent attribution + limitations banner shown while real mode is active. */
+export const REAL_MODE_ATTRIBUTION =
+  "Telemetría real por Entalpi (CC BY-NC 4.0) — RPE, síntomas y plan de carrera no publicados; las decisiones son validación de coherencia, no diagnóstico.";
 
 export const SIGNAL_QUALITY_LABELS: Record<string, string> = {
   high: "Alta",
