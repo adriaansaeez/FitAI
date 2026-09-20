@@ -16,7 +16,7 @@ TypeSafe SDK contract (verified 2026-09-20, docs v0.6.0):
 
 ## Tasks
 
-- [ ] T1: Scaffold Next.js (App Router) + TS + Vitest + Recharts + Zod; domain types + simulation engine (seeded route, 5 scenarios) + athlete history generator (0/1/3/5/10 sessions, comparability filter) + metric engine (smoothing windows, hr trend, history baseline/median)
+- [x] T1: Scaffold Next.js (App Router) + TS + Vitest + Recharts + Zod; domain types + simulation engine (seeded route, 5 scenarios) + athlete history generator (0/1/3/5/10 sessions, comparability filter) + metric engine (smoothing windows, hr trend, history baseline/median)
 - [ ] T2: Safety policy + DecisionProvider interface + MockDecisionProvider (deterministic) + composer (guardas, confidence thresholds, cooldown, limits) + all 10 mandatory domain tests green
 - [ ] T3: JevDecisionProvider (server-only, 4 questions per call, API route, timeout/error fallback to maintain) + provider selection (mock without key, "Modo simulación")
 - [ ] T4: UI single page (controls, summary cards, synchronized charts with cursor, decision table, audit panel, playback 1x/5x/20x) + README (install, env, controls, medical limits)
@@ -24,3 +24,6 @@ TypeSafe SDK contract (verified 2026-09-20, docs v0.6.0):
 
 Constraints (from spec):
 - Server-only Jev access; no TYPESAFE_API_KEY client-side; no auth/DB; deterministic seeded simulation; safety overrides mock & Jev; Spanish UI messages as templates (not free text from Jev); no medical claims.
+
+## Evidence
+- T1: commit 8a2b79c-ish (feat: scaffold Next.js app with domain and simulation layers) — 69 tests green, tsc clean. Pending: .env.example blocked by .env* safety policy (agent writes denied); document TYPESAFE_API_KEY in README instead, user may create file manually.
