@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { decideSecond } from "../src/domain/composer";
+import { MockDecisionProvider } from "../src/services/mockDecisionProvider";
 import {
   KonaImportError,
   MAX_VISIBLE_SECONDS,
@@ -464,5 +466,47 @@ describe("buildRealRaceWindow", () => {
     // With the same override the start may coincide or differ, but both are valid.
     expect(a.startSourceIndex).toBeGreaterThanOrEqual(90);
     expect(b.startSourceIndex).toBeGreaterThanOrEqual(90);
+  });
+
+  it("backs the first visible second with 45 s of pace and 75 s of HR, and shows no preroll decisions", () => {
+    const win = buildRealRaceWindow(csv, 42, 600);
+    const rows = parseOrThrow(csv);
+    // The 90 preroll rows immediately precede the first visible row.
+    const prerollRows = rows.slice(win.startSourceIndex - PREROLL_SECONDS, win.startSourceIndex);
+    expect(prerollRows).toHaveLength(PREROLL_SECONDS);
+    // The 45 s pace and 75 s HR metric windows of the first visible second
+    // are fully backed by real published rows (never invented).
+    for (const row of prerollRows.slice(-45)) {
+      expect(row.speed).not.toBeNull();
+    }
+    for (const row of prerollRows.slice(-75)) {
+      expect(row.heartrate).not.toBeNull();
+    }
+    // Preroll is never exposed as samples/decisions: local seconds start at 1
+    // and the sample count is exactly the visible duration.
+    expect(win.samples).toHaveLength(win.visibleDurationSeconds);
+    expect(win.samples.map((sample) => sample.second)).toEqual(
+      Array.from({ length: win.visibleDurationSeconds }, (_, i) => i + 1),
+    );
+    expect(win.samples[0]?.timestamp).toBe(win.startTimestamp);
+  });
+});
+
+describe("real window decisions fail closed without a pre-race target", () => {
+  it("never returns increase_gently with no target, no history and no baseline", async () => {
+    const win = buildRealRaceWindow(buildTestCsv(BIG_ROW_COUNT), 42, 600);
+    const provider = new MockDecisionProvider();
+    // First visible second, stable 60 s cadence points and a late second:
+    // every composed decision stays inside the fail-closed action set.
+    for (const second of [1, 60, 120, 300, 450, 600]) {
+      const trace = await decideSecond({
+        samples: win.samples.slice(0, second),
+        block: "tempo",
+        comparableHistoryCount: 0,
+        provider,
+      });
+      expect(trace.action).not.toBe("increase_gently");
+      expect(trace.safety.mayIncreaseIntensity).toBe(false);
+    }
   });
 });

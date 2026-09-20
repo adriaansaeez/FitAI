@@ -100,6 +100,7 @@ export default function HomePage() {
         baseline={sim.baseline}
         dataSource={sim.dataSource}
         realWindow={sim.realWindow}
+        evaluation={sim.evaluationForSelected}
       />
 
       <footer className="page-footer">

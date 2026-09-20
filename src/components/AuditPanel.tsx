@@ -8,6 +8,7 @@
  */
 
 import type { AthleteBaseline } from "@/domain/metrics";
+import type { RaceDecisionEvaluation } from "@/domain/evaluation";
 import type { RunningSample } from "@/domain/types";
 import type { DecisionEntry } from "./useRaceSimulation";
 import type { DataSource, RealRaceWindowPayload } from "./useRaceSimulation";
@@ -46,6 +47,79 @@ function formatSha256(sha256: string): string {
   return `${sha256.slice(0, 12)}…`;
 }
 
+/** Known actions get their runner-facing label; unknown strings stay verbatim. */
+function evaluationActionLabel(action: string): string {
+  return (ACTION_LABELS as Record<string, string>)[action] ?? action;
+}
+
+/** Format an HR trend in bpm/min, em dash when unavailable. */
+function formatHrTrend(bpmPerMin: number | null): string {
+  return bpmPerMin === null ? "—" : `${bpmPerMin.toFixed(2)} ppm/min`;
+}
+
+/**
+ * Sixth audit card: the decision compared against the telemetry that followed
+ * it (spec: "Qué se compara y qué no"). Observational only — the human
+ * videoReview/assessment labels are never inferred nor rendered as assigned.
+ */
+function ObservedComparisonCard({ evaluation }: { evaluation: RaceDecisionEvaluation }) {
+  return (
+    <div className="audit-card">
+      <h3>Comparación observada</h3>
+      <dl className="audit-metrics">
+        <Metric
+          label="Decisión evaluada"
+          value={`${evaluationActionLabel(evaluation.action)} · s ${evaluation.decisionSecond}`}
+        />
+        <Metric
+          label="Ritmo medio 60 s siguientes"
+          value={formatPace(evaluation.observedNext60s?.meanPaceSecPerKm ?? null)}
+        />
+        <Metric
+          label="FC media 60 s siguientes"
+          value={formatBpm(evaluation.observedNext60s?.meanHeartRateBpm ?? null)}
+        />
+        <Metric
+          label="Tendencia FC 60 s siguientes"
+          value={formatHrTrend(evaluation.observedNext60s?.hrTrendBpmPerMin ?? null)}
+        />
+        <Metric
+          label="Ritmo medio 90 s siguientes"
+          value={formatPace(evaluation.observedNext90s?.meanPaceSecPerKm ?? null)}
+        />
+        <Metric
+          label="FC media 90 s siguientes"
+          value={formatBpm(evaluation.observedNext90s?.meanHeartRateBpm ?? null)}
+        />
+        <Metric
+          label="Tendencia FC 90 s siguientes"
+          value={formatHrTrend(evaluation.observedNext90s?.hrTrendBpmPerMin ?? null)}
+        />
+        <Metric
+          label="Delta elevación (90 s siguientes)"
+          value={
+            evaluation.terrainDelta.elevationDeltaM === null
+              ? "—"
+              : `${evaluation.terrainDelta.elevationDeltaM.toFixed(1)} m`
+          }
+        />
+        <Metric
+          label="Pendiente media (90 s siguientes)"
+          value={
+            evaluation.terrainDelta.meanGradePct === null
+              ? "—"
+              : `${evaluation.terrainDelta.meanGradePct.toFixed(1)} %`
+          }
+        />
+      </dl>
+      <p className="note">
+        Sólo observación: el vídeo y la etiqueta humana (assessment) se asignan
+        fuera de la aplicación; una aceleración posterior nunca valida una subida.
+      </p>
+    </div>
+  );
+}
+
 function RealOriginCard({ realWindow }: { realWindow: RealRaceWindowPayload }) {
   return (
     <div className="audit-card">
@@ -80,6 +154,7 @@ export function AuditPanel({
   baseline: _baseline,
   dataSource = "synthetic",
   realWindow = null,
+  evaluation = null,
 }: {
   entry: DecisionEntry | null;
   sample: RunningSample | null;
@@ -87,6 +162,8 @@ export function AuditPanel({
   baseline: AthleteBaseline;
   dataSource?: DataSource;
   realWindow?: RealRaceWindowPayload | null;
+  /** Real mode only: evaluation of the selected decision vs the observed next 60/90 s. */
+  evaluation?: RaceDecisionEvaluation | null;
 }) {
   if (entry === null || sample === null) {
     return (
@@ -211,6 +288,10 @@ export function AuditPanel({
             ))}
           </ul>
         </div>
+
+        {dataSource === "real" && evaluation !== null ? (
+          <ObservedComparisonCard evaluation={evaluation} />
+        ) : null}
 
         {dataSource === "real" && realWindow !== null ? (
           <RealOriginCard realWindow={realWindow} />

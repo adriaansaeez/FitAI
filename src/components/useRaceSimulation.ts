@@ -24,6 +24,10 @@ import type {
   TrainingBlock,
 } from "@/domain/types";
 import { computeDerivedMetrics, type AthleteBaseline } from "@/domain/metrics";
+import {
+  evaluateDecisionAgainstObserved,
+  type RaceDecisionEvaluation,
+} from "@/domain/evaluation";
 import { evaluateSafety } from "@/domain/safety";
 import {
   generateScenarioSamples,
@@ -238,6 +242,12 @@ export interface RaceSimulation {
   entries: DecisionEntry[];
   selectedSecond: number;
   selectSecond: (second: number) => void;
+
+  // evaluation (real mode only): coherence view of the selected decision
+  // against the telemetry that followed it. Pure client-side recompute,
+  // never persisted (spec: evaluation rows incl. human labels are for
+  // external review, not client storage).
+  evaluationForSelected: RaceDecisionEvaluation | null;
 
   // status
   apiMode: "mock" | "jev";
@@ -576,6 +586,25 @@ export function useRaceSimulation(): RaceSimulation {
     }
   }, [entries]);
 
+  // Post-hoc evaluation of the decision in effect at the selected second,
+  // against the observed telemetry that followed it (real mode only). Pure
+  // and memoized over entries/selectedSecond/samples; never persisted.
+  const evaluationForSelected = useMemo(() => {
+    if (!isRealMode) {
+      return null;
+    }
+    const entry =
+      entries.find((candidate) => candidate.second === selectedSecond) ?? null;
+    if (entry === null) {
+      return null;
+    }
+    const sampleAtSecond = samples[selectedSecond - 1];
+    if (sampleAtSecond === undefined) {
+      return null;
+    }
+    return evaluateDecisionAgainstObserved(entry.trace, samples, entry.second);
+  }, [isRealMode, entries, selectedSecond, samples]);
+
   const setScenarioId = useCallback(
     (id: ScenarioId) => {
       setScenarioIdState(id);
@@ -671,6 +700,7 @@ export function useRaceSimulation(): RaceSimulation {
     entries,
     selectedSecond,
     selectSecond,
+    evaluationForSelected,
     apiMode,
     failureNote,
     totalSeconds: session.totalSeconds,
