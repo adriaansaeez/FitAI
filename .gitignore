@@ -16,3 +16,6 @@ next-env.d.ts
 
 # Build/typecheck artifacts
 *.tsbuildinfo
+
+# Real-race raw data (CC BY-NC 4.0 dataset — never commit licensed raw CSVs)
+data/
