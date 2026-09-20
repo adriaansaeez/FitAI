@@ -44,6 +44,8 @@ export type ProviderChoice = "mock" | "jev";
 
 /** Fixed demo seed: same scenario -> identical race. */
 const SEED = 42;
+/** Fixed seed for the real-race window request (UI control arrives in T7). */
+export const DEFAULT_REAL_SEED = 42;
 /** Route-level bound on carried history (mirrors the API contract). */
 const MAX_RECENT_SAMPLES = 120;
 const DECIDE_TIMEOUT_MS = 10_000;
@@ -63,12 +65,100 @@ export interface DecisionEntry {
 interface DecideBody {
   sample: RunningSample;
   block: TrainingBlock;
-  paceTargetSecPerKm: PaceTargetSecPerKm;
+  /** Optional: the real-race mode sends no pre-race target (fail closed). */
+  paceTargetSecPerKm?: PaceTargetSecPerKm;
   recentSamples: RunningSample[];
   historyCount: HistoryCount;
   previousDecision: DecisionTrace | null;
   callJev: boolean;
 }
+
+/** Where the simulated samples come from. */
+export type DataSource = "synthetic" | "real";
+/** Load state of the real-race window fetched from /api/race-window. */
+export type RealWindowStatus = "idle" | "loading" | "ready" | "error";
+
+/**
+ * Shape of GET /api/race-window's `window` payload (structural mirror of
+ * RealRaceWindow; the adapter module itself is server-only and is never
+ * imported from client code).
+ */
+export interface RealRaceWindowPayload {
+  id: string;
+  source: {
+    url: string;
+    license: string;
+    sha256: string;
+    athlete: string;
+    event: string;
+  };
+  seed: number;
+  startSourceIndex: number;
+  visibleDurationSeconds: number;
+  prerollSeconds: number;
+  samples: RunningSample[];
+  unavailable: {
+    rpe: boolean;
+    symptoms: string;
+    personalHistory: boolean;
+    plannedTarget: boolean;
+  };
+  cadenceSemantics: string;
+  symptomsSource: string;
+  startTimestamp: string;
+  endTimestamp: string;
+}
+
+export type IntervalHitInput = {
+  provider: ProviderChoice;
+  second: number;
+  isRealMode: boolean;
+  jevInterval: JevInterval;
+  /** > 0 marks a data discontinuity in the real telemetry. */
+  dataAgeSeconds: number;
+};
+
+/**
+ * Pure decision-cadence rule shared by both data sources.
+ *
+ * - Mock evaluates every second (demo wiring, both modes).
+ * - Synthetic + Jev: the demo interval select (1/5/15 s).
+ * - Real race (spec "Ejecución de Jev"): the first visible second, then every
+ *   stable 60 s; the jevInterval select is IGNORED. Any data discontinuity
+ *   (dataAgeSeconds > 0) forces an evaluation.
+ */
+export function isIntervalHit(input: IntervalHitInput): boolean {
+  if (input.provider === "mock") {
+    return true;
+  }
+  if (input.isRealMode) {
+    return (
+      input.second === 1 ||
+      input.second % 60 === 0 ||
+      input.dataAgeSeconds > 0
+    );
+  }
+  return input.second % input.jevInterval === 0;
+}
+
+/**
+ * Kona 2022 has no published athlete history: zero sessions, empty baseline
+ * (spec item 5 — never use generateAthleteHistory for this race).
+ */
+const REAL_RACE_HISTORY: AthleteHistory = {
+  profile: {
+    id: "kona-2022-gustav-iden",
+    displayName: "Gustav Iden (historial no publicado)",
+    sessions: [],
+    baseline: {},
+  },
+  comparableSessions: [],
+  comparableCount: 0,
+  historyMaturity: "none",
+};
+
+/** Training block reported to /api/decide in real mode (no published plan). */
+const REAL_RACE_BLOCK: TrainingBlock = "tempo";
 
 /** Clamp any requested second into the valid range [0, totalSeconds]. */
 export function clampSecond(totalSeconds: number, second: number): number {
@@ -115,6 +205,16 @@ export interface RaceSimulation {
   speed: Speed;
   setSpeed: (speed: Speed) => void;
 
+  // data source (synthetic scenarios vs the real Kona 2022 telemetry)
+  dataSource: DataSource;
+  setDataSource: (source: DataSource) => void;
+  realSeed: number;
+  setRealSeed: (seed: number) => void;
+  realDurationOverride: number | null;
+  setRealDurationOverride: (duration: number | null) => void;
+  realStatus: RealWindowStatus;
+  realWindow: RealRaceWindowPayload | null;
+
   // session descriptor (source of truth for the session length and origin)
   session: SessionDescriptor;
 
@@ -122,7 +222,8 @@ export interface RaceSimulation {
   samples: RunningSample[];
   history: AthleteHistory;
   block: TrainingBlock;
-  paceTarget: PaceTargetSecPerKm;
+  /** Undefined in real-race mode: no published pre-race target. */
+  paceTarget: PaceTargetSecPerKm | undefined;
   baseline: AthleteBaseline;
 
   // playback
@@ -151,6 +252,14 @@ export function useRaceSimulation(): RaceSimulation {
   const [jevInterval, setJevIntervalState] = useState<JevInterval>(5);
   const [speed, setSpeedState] = useState<Speed>(1);
 
+  // Real-race mode (Kona 2022): data source, seed/duration controls and the
+  // window fetched from GET /api/race-window.
+  const [dataSource, setDataSourceState] = useState<DataSource>("synthetic");
+  const [realSeed, setRealSeedState] = useState<number>(DEFAULT_REAL_SEED);
+  const [realDurationOverride, setRealDurationOverrideState] = useState<number | null>(null);
+  const [realWindow, setRealWindow] = useState<RealRaceWindowPayload | null>(null);
+  const [realStatus, setRealStatus] = useState<RealWindowStatus>("idle");
+
   const [playing, setPlaying] = useState(false);
   const [targetSecond, setTargetSecond] = useState(0);
   const [entries, setEntries] = useState<DecisionEntry[]>([]);
@@ -158,28 +267,98 @@ export function useRaceSimulation(): RaceSimulation {
   const [apiMode, setApiMode] = useState<"mock" | "jev">("mock");
   const [failureNote, setFailureNote] = useState<string | null>(null);
 
-  const samples = useMemo(() => generateScenarioSamples(scenarioId, SEED), [scenarioId]);
-  const history = useMemo(() => generateAthleteHistory(historyCount, SEED), [historyCount]);
+  const isRealMode = dataSource === "real";
+  const realReady = realStatus === "ready";
 
-  // Session descriptor for the current scenario path: the single source of
-  // truth for the session length (spec: real-race validation, items 2-3).
-  const session = useMemo<SessionDescriptor>(
-    () => ({
+  const samples = useMemo(() => {
+    if (isRealMode) {
+      return realWindow?.samples ?? [];
+    }
+    return generateScenarioSamples(scenarioId, SEED);
+  }, [isRealMode, realWindow, scenarioId]);
+
+  // Real race: never generateAthleteHistory (spec item 5) — the published
+  // dataset has no athlete history, so the profile is empty and fail-closed.
+  const history = useMemo(
+    () => (isRealMode ? REAL_RACE_HISTORY : generateAthleteHistory(historyCount, SEED)),
+    [isRealMode, historyCount],
+  );
+  // The history select is ignored in real mode: exactly 0 comparable sessions.
+  const effectiveHistoryCount: HistoryCount = isRealMode ? 0 : historyCount;
+
+  // Session descriptor: the single source of truth for the session length and
+  // origin (spec: real-race validation, items 2-3).
+  const session = useMemo<SessionDescriptor>(() => {
+    if (isRealMode) {
+      if (realWindow !== null) {
+        return {
+          samples: realWindow.samples,
+          totalSeconds: realWindow.visibleDurationSeconds,
+          source: {
+            kind: "real-race",
+            id: realWindow.id,
+            seed: realSeed,
+            startSourceIndex: realWindow.startSourceIndex,
+            visibleDurationSeconds: realWindow.visibleDurationSeconds,
+            prerollSeconds: realWindow.prerollSeconds,
+          },
+        };
+      }
+      // Window not loaded yet: empty session, pump is gated on realStatus.
+      return {
+        samples: [],
+        totalSeconds: 0,
+        source: {
+          kind: "real-race",
+          id: "kona-2022-gustav-iden",
+          seed: realSeed,
+          startSourceIndex: 0,
+          visibleDurationSeconds: 0,
+          prerollSeconds: 90,
+        },
+      };
+    }
+    return {
       samples,
       totalSeconds: samples.length,
       source: { kind: "synthetic-scenario", scenarioId },
-    }),
-    [samples, scenarioId],
-  );
+    };
+  }, [isRealMode, realWindow, realSeed, samples, scenarioId]);
 
   const definition = SCENARIOS[scenarioId];
-  const block = definition.block;
-  const paceTarget = definition.targetPaceSecPerKm;
-  const baseline = history.profile.baseline;
+  // Real mode has no published plan: report "tempo" with NO pace target and
+  // let the fail-closed guard deny increases server-side (spec item 7).
+  const block: TrainingBlock = isRealMode ? REAL_RACE_BLOCK : definition.block;
+  const paceTarget: PaceTargetSecPerKm | undefined = isRealMode
+    ? undefined
+    : definition.targetPaceSecPerKm;
+  const baseline = isRealMode ? REAL_RACE_HISTORY.profile.baseline : history.profile.baseline;
 
   // Mutable mirrors for the async pump; assigned on every render.
-  const configRef = useRef({ scenarioId, historyCount, provider, jevInterval, block, paceTarget, baseline, samples });
-  configRef.current = { scenarioId, historyCount, provider, jevInterval, block, paceTarget, baseline, samples };
+  const configRef = useRef({
+    scenarioId,
+    historyCount: effectiveHistoryCount,
+    provider,
+    jevInterval,
+    block,
+    paceTarget,
+    baseline,
+    samples,
+    isRealMode,
+    realReady,
+  });
+  configRef.current = {
+    scenarioId,
+    historyCount: effectiveHistoryCount,
+    provider,
+    jevInterval,
+    block,
+    paceTarget,
+    baseline,
+    samples,
+    isRealMode,
+    realReady,
+  };
 
   const entriesRef = useRef<DecisionEntry[]>(entries);
   entriesRef.current = entries;
@@ -203,10 +382,58 @@ export function useRaceSimulation(): RaceSimulation {
     autoFollowRef.current = true;
   }, []);
 
-  // Changing scenario or history invalidates the whole run.
+  // Changing scenario, history, or the real-race source invalidates the run.
   useEffect(() => {
     resetRun();
-  }, [scenarioId, historyCount, resetRun]);
+  }, [scenarioId, historyCount, dataSource, realSeed, realDurationOverride, resetRun]);
+
+  // Real window fetch: /api/race-window?seed=..[&durationSeconds=..]. Runs
+  // only in real mode; a failed load is surfaced via realStatus + failureNote
+  // and the pump stays gated until realStatus is "ready".
+  useEffect(() => {
+    if (!isRealMode) {
+      setRealStatus("idle");
+      setRealWindow(null);
+      return;
+    }
+    const controller = new AbortController();
+    let cancelled = false;
+    setRealStatus("loading");
+    const params = new URLSearchParams({ seed: String(realSeed) });
+    if (realDurationOverride !== null) {
+      params.set("durationSeconds", String(realDurationOverride));
+    }
+    fetch(`/api/race-window?${params.toString()}`, { signal: controller.signal })
+      .then(async (res) => {
+        const payload = (await res.json()) as
+          | { window: RealRaceWindowPayload }
+          | { error: string; message?: string };
+        if (cancelled) {
+          return;
+        }
+        if (!res.ok || !("window" in payload)) {
+          setRealStatus("error");
+          const err = payload as { error?: string; message?: string };
+          const hint = err.message ?? err.error ?? "error desconocido";
+          setFailureNote(`Carrera real: no se pudo cargar la ventana (${hint}).`);
+          return;
+        }
+        setRealWindow(payload.window);
+        setRealStatus("ready");
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRealStatus("error");
+          setFailureNote(
+            "Carrera real: fallo de red al cargar la ventana de telemetría (/api/race-window).",
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [isRealMode, realSeed, realDurationOverride]);
 
   const computeEntry = useCallback(async (second: number, runId: number): Promise<DecisionEntry> => {
     const cfg = configRef.current;
@@ -216,9 +443,18 @@ export function useRaceSimulation(): RaceSimulation {
       throw new Error(`sample out of range: ${second}`);
     }
     const prev = entriesRef.current[entriesRef.current.length - 1] ?? null;
+    if (cfg.isRealMode && !cfg.realReady) {
+      // No real window loaded: the pump must never decide without samples.
+      throw new Error("real_window_not_ready");
+    }
 
-    const intervalHit =
-      cfg.provider === "mock" || second % cfg.jevInterval === 0;
+    const intervalHit = isIntervalHit({
+      provider: cfg.provider,
+      second,
+      isRealMode: cfg.isRealMode,
+      jevInterval: cfg.jevInterval,
+      dataAgeSeconds: sample.dataAgeSeconds,
+    });
     // First second, interval hits and symptom seconds are always evaluated
     // server-side (safety dominates; a symptom never reaches a provider).
     const mustEvaluate = intervalHit || prev === null || sample.symptomsReported;
@@ -279,9 +515,14 @@ export function useRaceSimulation(): RaceSimulation {
   }, []);
 
   // Sequential decision pump: processes every pending second up to the
-  // playback target, one fetch at a time, in order.
+  // playback target, one fetch at a time, in order. Gated in real mode until
+  // the window is ready (no samples -> no decisions).
+  const pumpAllowed = !isRealMode || realReady;
   useEffect(() => {
     if (pumpRunningRef.current) {
+      return;
+    }
+    if (!pumpAllowed) {
       return;
     }
     pumpRunningRef.current = true;
@@ -304,7 +545,7 @@ export function useRaceSimulation(): RaceSimulation {
         pumpRunningRef.current = false;
       }
     })();
-  }, [targetSecond, computeEntry]);
+  }, [targetSecond, computeEntry, pumpAllowed]);
 
   // Playback ticker: advances the target at the selected speed.
   useEffect(() => {
@@ -358,6 +599,18 @@ export function useRaceSimulation(): RaceSimulation {
     setSpeedState(value);
   }, []);
 
+  const setDataSource = useCallback((source: DataSource) => {
+    setDataSourceState(source);
+  }, []);
+
+  const setRealSeed = useCallback((seed: number) => {
+    setRealSeedState(seed);
+  }, []);
+
+  const setRealDurationOverride = useCallback((duration: number | null) => {
+    setRealDurationOverrideState(duration);
+  }, []);
+
   const togglePlay = useCallback(() => {
     setPlaying((wasPlaying) => {
       if (!wasPlaying && targetSecondRef.current >= totalSecondsRef.current) {
@@ -395,6 +648,14 @@ export function useRaceSimulation(): RaceSimulation {
     setJevInterval,
     speed,
     setSpeed,
+    dataSource,
+    setDataSource,
+    realSeed,
+    setRealSeed,
+    realDurationOverride,
+    setRealDurationOverride,
+    realStatus,
+    realWindow,
     samples,
     session,
     history,
