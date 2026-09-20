@@ -344,6 +344,91 @@ describe("JevDecisionProvider", () => {
     expect(athlete.symptomsReported).toBe(false);
   });
 
+  it("passes through the target pace range when supplied and omits target otherwise", () => {
+    const withTarget = buildJevState({
+      ...safeEasyContext(),
+      targetPaceSecPerKm: { min: 315, max: 330 },
+    });
+    expect(
+      (withTarget.target as { paceSecPerKm: { min: number; max: number } }).paceSecPerKm,
+    ).toEqual({ min: 315, max: 330 });
+
+    const withoutTarget = buildJevState(safeEasyContext());
+    expect("target" in withoutTarget).toBe(false);
+  });
+
+  it("maps history maturity and comparable history count to top-level state", () => {
+    const state = buildJevState(safeEasyContext());
+    expect(state.historyMaturity).toBe("established");
+    expect(state.comparableHistoryCount).toBe(10);
+
+    const bare = buildJevState({ block: "easy", second: 0 });
+    expect("historyMaturity" in bare).toBe(false);
+    expect("comparableHistoryCount" in bare).toBe(false);
+  });
+
+  it("every question instruction references concrete state paths; option sets unchanged", async () => {
+    const { client, requests } = fakeJevClient(fullAnswers());
+    await new JevDecisionProvider(client).decide({ context: safeEasyContext() });
+
+    const q = (requests[0] as CapturedRequest)
+      .questions as Record<string, { instructions?: unknown; criteria?: unknown }>;
+    const text = (value: unknown): string =>
+      typeof value === "string" ? value : JSON.stringify(value);
+
+    const effortAction = text(q.effort_action?.instructions);
+    expect(effortAction).toContain("`window.paceVsTargetSeconds`");
+    expect(effortAction).toContain("`window.hrTrendBpmPerMin`");
+    expect(effortAction).toContain("`athlete.rpe`");
+    expect(effortAction).toContain("`safety.mayIncreaseIntensity`");
+    expect(effortAction).toContain("conservative");
+    expect(effortAction).toContain("insufficient_evidence");
+
+    const disproportionate = text(q.effort_disproportionate?.instructions);
+    expect(disproportionate).toContain("`athlete.rpe`");
+    expect(disproportionate).toContain("`window.paceSecPerKm`");
+    expect(disproportionate).toContain("`window.heartRateBpm`");
+    expect(disproportionate).toContain("`block`");
+
+    const explanation = text(q.context_explanation?.instructions);
+    for (const path of [
+      "`window.gradePct`",
+      "`window.paceVsTargetSeconds`",
+      "`window.heartRateBpm`",
+      "`window.hrTrendBpmPerMin`",
+      "`window.signalQuality`",
+    ]) {
+      expect(explanation).toContain(path);
+    }
+
+    const interpretability = text(q.context_interpretability?.instructions);
+    expect(interpretability).toContain("`target.paceSecPerKm`");
+    expect(interpretability).toContain("`window.paceSecPerKm`");
+    expect(interpretability).toContain("`athlete.rpe`");
+    expect(interpretability).toContain("`historyMaturity`");
+
+    // Same question IDs and option sets as before the rewrite.
+    expect(Object.keys(q.effort_action?.criteria as object).sort()).toEqual([
+      "decrease_gently",
+      "increase_gently",
+      "insufficient_evidence",
+      "maintain",
+      "recover",
+    ]);
+    expect(Object.keys(q.effort_disproportionate?.criteria as object).sort()).toEqual([
+      "false",
+      "true",
+    ]);
+    expect(Object.keys(q.context_explanation?.criteria as object).sort()).toEqual([
+      "likely_heat_or_fatigue",
+      "normal_variation",
+      "not_enough_context",
+      "pace_below_target",
+      "uphill_or_terrain",
+    ]);
+    expect(q.context_interpretability?.criteria).toHaveLength(3);
+  });
+
   it("exposes the default 5s timeout constant", () => {
     expect(JEVD_DEFAULT_TIMEOUT_MS).toBe(5000);
   });

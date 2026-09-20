@@ -10,6 +10,7 @@ import {
   COMPOSER_REASON_CODES,
   PACE_CHANGE_COOLDOWN_SECONDS,
   RECOVER_REEVALUATION_SECONDS,
+  buildDecisionContext,
   composeDecision,
 } from "../src/domain/composer";
 import { evaluateSafety } from "../src/domain/safety";
@@ -365,6 +366,17 @@ describe("message template integration", () => {
     ).toContain("5 y 10 s/km");
     expect(resolveDecisionMessageKey("maintain", "unknown_reason")).toBe("decision.maintain");
     expect(renderDecisionMessage("decision.unknown_key")).toBe("decision.unknown_key");
+  });
+});
+
+describe("buildDecisionContext", () => {
+  it("includes targetPaceSecPerKm when provided and leaves it undefined when omitted", () => {
+    const target = { min: 320, max: 340 };
+    const withTarget = buildDecisionContext(sample(), metrics(), evaluateSafety(sample(), metrics(), "easy"), "easy", target);
+    expect(withTarget.targetPaceSecPerKm).toBe(target);
+
+    const withoutTarget = buildDecisionContext(sample(), metrics(), evaluateSafety(sample(), metrics(), "easy"), "easy");
+    expect(withoutTarget.targetPaceSecPerKm).toBeUndefined();
   });
 });
 

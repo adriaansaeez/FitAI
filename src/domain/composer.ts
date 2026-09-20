@@ -301,9 +301,11 @@ export function buildDecisionContext(
   metrics: DerivedMetrics,
   safety: SafetyResult,
   block: TrainingBlock,
+  targetPaceSecPerKm?: PaceTargetSecPerKm,
 ): Record<string, unknown> {
   return {
     block,
+    targetPaceSecPerKm,
     second: sample.second,
     paceSecPerKm: sample.paceSecPerKm,
     heartRateBpm: sample.heartRateBpm,
@@ -366,7 +368,13 @@ export async function decideSecond(input: DecideSecondInput): Promise<DecisionTr
   if (providerNeeded && input.provider !== undefined) {
     try {
       providerResult = await input.provider.decide({
-        context: buildDecisionContext(currentSample, metrics, safety, block),
+        context: buildDecisionContext(
+          currentSample,
+          metrics,
+          safety,
+          block,
+          input.targetPaceSecPerKm,
+        ),
         previousDecision: previousDecision ?? undefined,
       });
     } catch {

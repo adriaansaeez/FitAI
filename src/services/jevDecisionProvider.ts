@@ -73,6 +73,13 @@ export type RunningContext = {
     mayIncreaseIntensity: boolean;
     missingRequiredMetric: boolean;
   };
+  /**
+   * History-maturity signals, kept at top level by adapter convention: how
+   * much comparable history exists to interpret the window against. Omitted
+   * when the prepared context does not carry them (JSON-safe state).
+   */
+  historyMaturity?: string;
+  comparableHistoryCount?: number;
 };
 
 /** Question labels -> ProviderAction. stop_and_escalate is intentionally absent. */
@@ -166,6 +173,11 @@ export function buildJevState(context: Record<string, unknown>): RunningContext 
     symptomsReported: readBoolean(context, "symptomsReported"),
   });
 
+  // History-maturity signals for the interpretability question. Top level by
+  // adapter convention; omitted when the prepared context lacks them.
+  const historyMaturity = readString(context, "historyMaturity");
+  const comparableHistoryCount = readNumber(context, "comparableHistoryCount");
+
   // The block pace-target range is not part of buildDecisionContext output
   // today; include it when a caller supplies it so the state stays faithful
   // to the documented RunningContext shape.
@@ -206,12 +218,36 @@ export function buildJevState(context: Record<string, unknown>): RunningContext 
       symptomsReported: athlete["symptomsReported"] as boolean,
     },
     safety,
+    ...(historyMaturity !== undefined ? { historyMaturity } : {}),
+    ...(comparableHistoryCount !== undefined ? { comparableHistoryCount } : {}),
   };
 }
 
 // ---------------------------------------------------------------------------
 // Questions (plain English, specific criteria, per the docs)
 // ---------------------------------------------------------------------------
+
+const EFFORT_ACTION_INSTRUCTIONS =
+  "For the current running block, select the most conservative training action. " +
+  "Field meanings: `window.paceVsTargetSeconds` is the window pace versus the target range `target.paceSecPerKm` (when present); positive means slower than target, negative means faster. " +
+  "`window.hrTrendBpmPerMin` is heart-rate drift per minute across the window; a clearly positive value means rising internal cost. " +
+  "`athlete.rpe` is the runner's self-reported effort on a 0-10 scale, higher = harder. " +
+  "`safety.mayIncreaseIntensity` false means an intensity increase is not allowed in this state; a hard safety stop or reported symptoms would have blocked this request before it was sent. " +
+  "Judge from `block`, the window fields, `athlete.rpe`, and data reliability (`window.signalQuality`, `window.dataAgeSeconds`). Do not diagnose illness. " +
+  "Choose the conservative action given the evidence; use insufficient_evidence only when the state genuinely lacks the metrics needed for the other options (for example no pace and no heart rate), not merely when the choice is close.";
+
+const EFFORT_DISPROPORTIONATE_INSTRUCTIONS =
+  "Is the runner's apparent effort disproportionate to the current workout objective? " +
+  "Compare the self-reported effort `athlete.rpe` (0-10, higher = harder) against the observed pace `window.paceSecPerKm` and heart rate `window.heartRateBpm` for the block type `block` and the target pace range `target.paceSecPerKm` when present. " +
+  "Effort is disproportionate when RPE or heart rate is clearly higher than the pace and block justify (for example high `athlete.rpe` with pace at or faster than target, or `window.hrTrendBpmPerMin` clearly positive at an easy pace), discounting terrain via `window.gradePct` and unreliable data via `window.signalQuality`. Do not diagnose illness.";
+
+const CONTEXT_EXPLANATION_INSTRUCTIONS =
+  "Which non-medical context best explains this pace-versus-effort pattern? " +
+  "Read the state: `window.gradePct` is terrain slope in percent (non-zero grade plausibly slows pace at modest effort); `window.paceVsTargetSeconds` is seconds versus the target range `target.paceSecPerKm` (positive = slower); `window.heartRateBpm` and `window.hrTrendBpmPerMin` show internal cost and its drift; `window.signalQuality` and `window.dataAgeSeconds` say how trustworthy the window is. " +
+  "uphill_or_terrain when `window.gradePct` explains a slower pace without excess effort; pace_below_target when pace is below the target range without excess effort; likely_heat_or_fatigue when effort is elevated for a comparable pace (a training-context label, not a diagnosis); normal_variation when the deviation is small or expected; not_enough_context when these window fields cannot support any explanation.";
+
+const CONTEXT_INTERPRETABILITY_INSTRUCTIONS =
+  "Score how interpretable this context is for a conservative pacing decision, based on what the state concretely contains: the target range `target.paceSecPerKm`; window pace and heart rate (`window.paceSecPerKm`, `window.heartRateBpm`); the heart-rate trend `window.hrTrendBpmPerMin`; self-reported effort `athlete.rpe`; and comparison history (`historyMaturity`, `comparableHistoryCount`). Judge completeness and consistency of this picture, not which action to take.";
 
 const EFFORT_ACTION_CRITERIA = {
   increase_gently:
@@ -237,9 +273,9 @@ const CONTEXT_EXPLANATION_CRITERIA = {
 } as const;
 
 const INTERPRETABILITY_RUBRIC = [
-  "Unusable: key measurements are missing, stale, contradictory, or incomparable.",
-  "Limited: key metrics exist but slope, RPE, or personal reference do not clarify the pattern.",
-  "Clear: target, pace, heart rate, RPE, terrain, and data quality form a consistent picture.",
+  "Unusable: key measurements are missing or unusable - for example `window.paceSecPerKm` or `window.heartRateBpm` absent, a stale or low-quality window (`window.dataAgeSeconds`, `window.signalQuality`), or no comparable history (`historyMaturity`, `comparableHistoryCount`) - so the pattern cannot be judged.",
+  "Limited: the core window metrics exist and are fresh, but the picture is incomplete - for example the target range `target.paceSecPerKm`, the trend `window.hrTrendBpmPerMin`, or `athlete.rpe` is missing, or history is not yet mature - so the pattern is only partly explained.",
+  "Clear: target (`target.paceSecPerKm`), window pace and heart rate (`window.paceSecPerKm`, `window.heartRateBpm`), trend (`window.hrTrendBpmPerMin`), effort (`athlete.rpe`), terrain (`window.gradePct`), and data quality (`window.signalQuality`) are present and form a consistent picture.",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -273,23 +309,20 @@ export class JevDecisionProvider implements DecisionProvider {
       // SDK default model ('jev-latest') is used: no model override here.
       state,
       questions: {
-        effort_action: choice(
-          "For the current running block, select the most conservative training action. Do not diagnose illness. Respect safety in state.",
-          EFFORT_ACTION_CRITERIA,
-        ),
+        effort_action: choice(EFFORT_ACTION_INSTRUCTIONS, EFFORT_ACTION_CRITERIA),
         effort_disproportionate: noul(
-          "Is the athlete's apparent effort disproportionate to the current workout objective?",
+          EFFORT_DISPROPORTIONATE_INSTRUCTIONS,
           {
             true: "Effort is clearly higher than the block and target pace justify.",
             false: "Effort is proportionate to the block, pace, and terrain.",
           },
         ),
         context_explanation: choice(
-          "Which non-medical context best explains this pace-versus-effort pattern?",
+          CONTEXT_EXPLANATION_INSTRUCTIONS,
           CONTEXT_EXPLANATION_CRITERIA,
         ),
         context_interpretability: score(
-          "How interpretable is this context for a conservative pacing decision?",
+          CONTEXT_INTERPRETABILITY_INSTRUCTIONS,
           INTERPRETABILITY_RUBRIC,
         ),
       },

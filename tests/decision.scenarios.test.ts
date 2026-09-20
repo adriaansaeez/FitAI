@@ -209,5 +209,5 @@ function buildProviderContext(
     comparableHistoryCount: history.comparableCount,
   });
   const safety = evaluateSafety(current, derived, scenario.block);
-  return buildDecisionContext(current, derived, safety, scenario.block);
+  return buildDecisionContext(current, derived, safety, scenario.block, scenario.targetPaceSecPerKm);
 }
