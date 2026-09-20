@@ -420,7 +420,7 @@ describe("providerSelection", () => {
 
 describe("POST /api/decide", () => {
   it("rejects malformed bodies with 400", async () => {
-    const { createDecideHandler } = await import("../src/app/api/decide/route");
+    const { createDecideHandler } = await import("../src/app/api/decide/handler");
     const handler = createDecideHandler();
 
     const cases: unknown[] = [
@@ -445,7 +445,7 @@ describe("POST /api/decide", () => {
     vi.stubEnv("TYPESAFE_API_KEY", "test-key-not-real");
     const { client, requests } = fakeJevClient(fullAnswers());
     const provider = new JevDecisionProvider(client);
-    const { createDecideHandler } = await import("../src/app/api/decide/route");
+    const { createDecideHandler } = await import("../src/app/api/decide/handler");
     const handler = createDecideHandler({ getProvider: () => provider });
 
     const response = await handler(postRequest(validRouteBody()));
@@ -464,7 +464,7 @@ describe("POST /api/decide", () => {
         throw new Error("APITimeoutError");
       },
     };
-    const { createDecideHandler } = await import("../src/app/api/decide/route");
+    const { createDecideHandler } = await import("../src/app/api/decide/handler");
     const handler = createDecideHandler({ getProvider: () => failingProvider });
 
     const response = await handler(postRequest(validRouteBody()));
@@ -488,7 +488,7 @@ describe("POST /api/decide", () => {
         };
       },
     };
-    const { createDecideHandler } = await import("../src/app/api/decide/route");
+    const { createDecideHandler } = await import("../src/app/api/decide/handler");
     const handler = createDecideHandler({ getProvider: () => countingProvider });
 
     const body = {
