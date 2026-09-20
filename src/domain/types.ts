@@ -89,3 +89,28 @@ export type DecisionTrace = {
 
 /** Pace target range for a block, in seconds per kilometer. */
 export type PaceTargetSecPerKm = { min: number; max: number };
+
+/**
+ * Descriptor of the session that drives a race simulation.
+ *
+ * Plain discriminated union, deliberately decoupled from the
+ * simulation/realRace module: synthetic scenarios keep using
+ * `generateScenarioSamples`, while real races carry their own provenance.
+ * totalSeconds always equals samples.length (one sample per second).
+ */
+export type SessionDescriptor = {
+  /** One sample per second, 1-indexed. */
+  samples: RunningSample[];
+  /** Total session duration in seconds; equals samples.length. */
+  totalSeconds: number;
+  source:
+    | { kind: "synthetic-scenario"; scenarioId: string }
+    | {
+        kind: "real-race";
+        id: string;
+        seed: number;
+        startSourceIndex: number;
+        visibleDurationSeconds: number;
+        prerollSeconds: number;
+      };
+};

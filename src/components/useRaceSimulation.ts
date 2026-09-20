@@ -20,6 +20,7 @@ import type {
   DecisionTrace,
   PaceTargetSecPerKm,
   RunningSample,
+  SessionDescriptor,
   TrainingBlock,
 } from "@/domain/types";
 import { computeDerivedMetrics, type AthleteBaseline } from "@/domain/metrics";
@@ -35,7 +36,6 @@ import {
   type HistoryCount,
 } from "@/simulation/history";
 
-export const SIMULATION_SECONDS = 600;
 export const SPEED_OPTIONS = [1, 5, 20] as const;
 export const JEVI_INTERVAL_OPTIONS = [1, 5, 15] as const;
 export type Speed = (typeof SPEED_OPTIONS)[number];
@@ -68,6 +68,16 @@ interface DecideBody {
   historyCount: HistoryCount;
   previousDecision: DecisionTrace | null;
   callJev: boolean;
+}
+
+/** Clamp any requested second into the valid range [0, totalSeconds]. */
+export function clampSecond(totalSeconds: number, second: number): number {
+  return Math.max(0, Math.min(totalSeconds, Math.round(second)));
+}
+
+/** The run is completed once the playback frontier reached the last second. */
+export function isCompleted(totalSeconds: number, targetSecond: number): boolean {
+  return targetSecond >= totalSeconds;
 }
 
 async function decideApi(body: DecideBody): Promise<{
@@ -104,6 +114,9 @@ export interface RaceSimulation {
   setJevInterval: (interval: JevInterval) => void;
   speed: Speed;
   setSpeed: (speed: Speed) => void;
+
+  // session descriptor (source of truth for the session length and origin)
+  session: SessionDescriptor;
 
   // data
   samples: RunningSample[];
@@ -148,6 +161,17 @@ export function useRaceSimulation(): RaceSimulation {
   const samples = useMemo(() => generateScenarioSamples(scenarioId, SEED), [scenarioId]);
   const history = useMemo(() => generateAthleteHistory(historyCount, SEED), [historyCount]);
 
+  // Session descriptor for the current scenario path: the single source of
+  // truth for the session length (spec: real-race validation, items 2-3).
+  const session = useMemo<SessionDescriptor>(
+    () => ({
+      samples,
+      totalSeconds: samples.length,
+      source: { kind: "synthetic-scenario", scenarioId },
+    }),
+    [samples, scenarioId],
+  );
+
   const definition = SCENARIOS[scenarioId];
   const block = definition.block;
   const paceTarget = definition.targetPaceSecPerKm;
@@ -161,6 +185,10 @@ export function useRaceSimulation(): RaceSimulation {
   entriesRef.current = entries;
   const targetSecondRef = useRef(targetSecond);
   targetSecondRef.current = targetSecond;
+  // Mutable mirror of the session length for callbacks/effect timers; stable
+  // per memoized samples, so reading it inside updaters is never stale.
+  const totalSecondsRef = useRef(session.totalSeconds);
+  totalSecondsRef.current = session.totalSeconds;
   const runIdRef = useRef(0);
   const pumpRunningRef = useRef(false);
   const autoFollowRef = useRef(true);
@@ -286,7 +314,7 @@ export function useRaceSimulation(): RaceSimulation {
     const intervalMs = 1000 / speed;
     const timer = setInterval(() => {
       setTargetSecond((current) => {
-        if (current >= SIMULATION_SECONDS) {
+        if (current >= totalSecondsRef.current) {
           setPlaying(false);
           return current;
         }
@@ -332,7 +360,7 @@ export function useRaceSimulation(): RaceSimulation {
 
   const togglePlay = useCallback(() => {
     setPlaying((wasPlaying) => {
-      if (!wasPlaying && targetSecondRef.current >= SIMULATION_SECONDS) {
+      if (!wasPlaying && targetSecondRef.current >= totalSecondsRef.current) {
         return wasPlaying; // completed: use Reiniciar to run again
       }
       return !wasPlaying;
@@ -347,13 +375,13 @@ export function useRaceSimulation(): RaceSimulation {
   const stepOneSecond = useCallback(() => {
     autoFollowRef.current = true;
     setPlaying(false);
-    setTargetSecond((current) => Math.min(SIMULATION_SECONDS, current + 1));
-    setSelectedSecond((current) => Math.min(SIMULATION_SECONDS, current + 1));
+    setTargetSecond((current) => clampSecond(totalSecondsRef.current, current + 1));
+    setSelectedSecond((current) => clampSecond(totalSecondsRef.current, current + 1));
   }, []);
 
   const selectSecond = useCallback((second: number) => {
     autoFollowRef.current = false;
-    setSelectedSecond(Math.max(0, Math.min(SIMULATION_SECONDS, Math.round(second))));
+    setSelectedSecond(clampSecond(totalSecondsRef.current, second));
   }, []);
 
   return {
@@ -368,6 +396,7 @@ export function useRaceSimulation(): RaceSimulation {
     speed,
     setSpeed,
     samples,
+    session,
     history,
     block,
     paceTarget,
@@ -377,12 +406,12 @@ export function useRaceSimulation(): RaceSimulation {
     restart,
     stepOneSecond,
     targetSecond,
-    completed: targetSecond >= SIMULATION_SECONDS,
+    completed: isCompleted(session.totalSeconds, targetSecond),
     entries,
     selectedSecond,
     selectSecond,
     apiMode,
     failureNote,
-    totalSeconds: SIMULATION_SECONDS,
+    totalSeconds: session.totalSeconds,
   };
 }
