@@ -89,6 +89,63 @@ describe("scenario defining patterns", () => {
     expect(before.every((s) => !s.symptomsReported)).toBe(true);
   });
 
+  it("inexperienced-runner: erratic but physiologically realistic", () => {
+    const samples = generateScenarioSamples("inexperienced-runner", 42);
+
+    // Pace: always present and inside physiologically plausible bounds.
+    const validPaces = paces(samples);
+    expect(validPaces).toHaveLength(samples.length);
+    expect(Math.min(...validPaces)).toBeGreaterThanOrEqual(290);
+    expect(Math.max(...validPaces)).toBeLessThanOrEqual(415);
+
+    // Pace is genuinely erratic: novice sawtooth, far noisier than the
+    // easy-under-target signal (stdDev ~1.5 there).
+    const paceMean = mean(validPaces);
+    const paceStdDev = Math.sqrt(
+      mean(validPaces.map((p) => (p - paceMean) ** 2)),
+    );
+    expect(paceStdDev).toBeGreaterThan(25);
+    expect(Math.max(...validPaces) - Math.min(...validPaces)).toBeGreaterThan(80);
+
+    // HR: always present, bounded, and swinging hard.
+    const hrs = samples
+      .map((s) => s.heartRateBpm)
+      .filter((v): v is number => v !== null);
+    expect(hrs).toHaveLength(samples.length);
+    expect(Math.min(...hrs)).toBeGreaterThanOrEqual(120);
+    expect(Math.max(...hrs)).toBeLessThanOrEqual(186);
+    expect(Math.max(...hrs) - Math.min(...hrs)).toBeGreaterThan(35);
+
+    // HR lags pace: in the first 120 s cycle, the fastest pace happens
+    // before the HR peak (surge first, HR follows).
+    const firstCycle = samples.slice(0, 120);
+    const minPaceSecond = firstCycle.reduce(
+      (best, s) => ((s.paceSecPerKm ?? Infinity) < best.pace ? { second: s.second, pace: s.paceSecPerKm ?? Infinity } : best),
+      { second: 0, pace: Infinity },
+    ).second;
+    const maxHrSecond = firstCycle.reduce(
+      (best, s) => ((s.heartRateBpm ?? -Infinity) > best.hr ? { second: s.second, hr: s.heartRateBpm ?? -Infinity } : best),
+      { second: 0, hr: -Infinity },
+    ).second;
+    expect(minPaceSecond).toBeGreaterThan(0);
+    expect(maxHrSecond).toBeGreaterThan(0);
+    expect(minPaceSecond).toBeLessThan(maxHrSecond);
+
+    // RPE checkpoints (every 30 s) jump within [4, 8]; both ends occur.
+    const rpeCheckpoints = samples
+      .filter((s) => s.second % 30 === 0)
+      .map((s) => s.rpe)
+      .filter((v): v is number => v !== null);
+    expect(rpeCheckpoints).toHaveLength(20);
+    expect(rpeCheckpoints.every((r) => r >= 4 && r <= 8)).toBe(true);
+    expect(rpeCheckpoints).toContain(4);
+    expect(rpeCheckpoints).toContain(8);
+
+    // Signal stays clean; no symptoms in this scenario.
+    expect(samples.every((s) => s.signalQuality === "high")).toBe(true);
+    expect(samples.every((s) => !s.symptomsReported)).toBe(true);
+  });
+
   it("symptom-stop: supports a custom symptom second", () => {
     const samples = generateScenarioSamples("symptom-stop", 11, {
       symptomSecond: 120,

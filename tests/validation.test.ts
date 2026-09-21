@@ -18,6 +18,7 @@ describe("zod validation of scenario output", () => {
     "uphill",
     "poor-signal",
     "symptom-stop",
+    "inexperienced-runner",
   ] as const)("%s samples pass the RunningSample schema", (scenarioId) => {
     const samples = generateScenarioSamples(scenarioId, 42);
     expect(samples).toHaveLength(600);

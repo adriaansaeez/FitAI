@@ -1,5 +1,5 @@
 /**
- * The five scenario definitions from the spec, as data, plus a pure
+ * The six scenario definitions from the spec, as data, plus a pure
  * sample generator: 1 sample per second, 600 samples, fully seed-driven.
  *
  * Same (scenarioId, seed, opts) -> identical output. No Date.now, no Math.random.
@@ -14,7 +14,8 @@ export type ScenarioId =
   | "cardiac-drift"
   | "uphill"
   | "poor-signal"
-  | "symptom-stop";
+  | "symptom-stop"
+  | "inexperienced-runner";
 
 export const SCENARIO_IDS: readonly ScenarioId[] = [
   "easy-under-target",
@@ -22,6 +23,7 @@ export const SCENARIO_IDS: readonly ScenarioId[] = [
   "uphill",
   "poor-signal",
   "symptom-stop",
+  "inexperienced-runner",
 ];
 
 export interface ScenarioDefinition {
@@ -85,6 +87,17 @@ export const SCENARIOS: Record<ScenarioId, ScenarioDefinition> = {
     targetPaceSecPerKm: { min: 315, max: 330 },
     symptomSecond: 360,
     expectedOutcome: "Stop and escalate without calling Jev.",
+  },
+  "inexperienced-runner": {
+    id: "inexperienced-runner",
+    label: "Inexperienced runner",
+    description:
+      "Inexperienced runner: erratic pace surges and fades, HR swinging high and uncontrolled, RPE jumping.",
+    block: "easy",
+    targetPaceSecPerKm: { min: 315, max: 330 },
+    symptomSecond: null,
+    expectedOutcome:
+      "Maintain or decrease; erratic evidence and HR spikes must never trigger an increase.",
   },
 };
 
@@ -269,6 +282,36 @@ function readScenarioSample(
         signalQuality: "high",
         dataAgeSeconds: second % 3 === 0 ? 1 : 0,
         rpe: rpeCheckpoint ? 3 : null,
+        goodSample: true,
+      };
+    }
+
+    case "inexperienced-runner": {
+      // Novice sawtooth pacing: 120 s cycle. First 40 s quadratic surge
+      // (340 -> 295 s/km), next 80 s linear fade (295 -> 410 s/km).
+      const t = second % 120;
+      const basePace =
+        t < 40
+          ? 340 - 45 * (t / 40) ** 2
+          : 295 + 115 * ((t - 40) / 80);
+      const pace = basePace + rngGauss(rng, 0, 4);
+      // HR lags the surges: phase-shifted sine plus slow upward drift.
+      const hr =
+        150 +
+        28 * Math.sin((2 * Math.PI * second) / 120 - 0.9) +
+        second * 0.004 +
+        rngGauss(rng, 0, 3);
+      // Surge intensity 0..1 derived from how far below the cycle-start pace.
+      const surgeIntensity = Math.min(1, Math.max(0, (340 - basePace) / 45));
+      return {
+        paceSecPerKm: round1(Math.min(415, Math.max(290, pace))),
+        heartRateBpm: Math.round(Math.min(186, Math.max(120, hr))),
+        cadenceSpm: Math.round(158 + 10 * surgeIntensity + rngGauss(rng, 0, 3)),
+        signalQuality: "high",
+        dataAgeSeconds: second % 3 === 0 ? 1 : 0,
+        rpe: rpeCheckpoint
+          ? 4 + Math.round(4 * (0.5 + 0.5 * Math.sin((2 * Math.PI * second) / 120 - 0.9)))
+          : null,
         goodSample: true,
       };
     }

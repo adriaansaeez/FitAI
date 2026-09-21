@@ -5,10 +5,11 @@ import {
 } from "../src/simulation/scenarios";
 
 describe("scenario determinism", () => {
-  it("exposes exactly the five scenario ids from the spec", () => {
+  it("exposes exactly the six scenario ids from the spec", () => {
     expect([...SCENARIO_IDS].sort()).toEqual([
       "cardiac-drift",
       "easy-under-target",
+      "inexperienced-runner",
       "poor-signal",
       "symptom-stop",
       "uphill",

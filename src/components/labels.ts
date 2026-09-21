@@ -34,12 +34,12 @@ export const ACTION_SHORT_LABELS: Record<DecisionAction, string> = {
 
 /** Sober traffic-light palette. Safety and stops dominate visually. */
 export const ACTION_COLORS: Record<DecisionAction, string> = {
-  increase_gently: "#2e7d32",
-  maintain: "#b8860b",
-  decrease_gently: "#ef6c00",
-  recover: "#1565c0",
-  insufficient_data: "#6b6b6b",
-  stop_and_escalate: "#c62828",
+  increase_gently: "#fc5200",
+  maintain: "#0060d0",
+  decrease_gently: "#a83a00",
+  recover: "#0060d0",
+  insufficient_data: "#43423f",
+  stop_and_escalate: "#b42318",
 };
 
 /**
@@ -77,6 +77,7 @@ export const SCENARIO_LABELS: Record<ScenarioId, string> = {
   uphill: "Subida",
   "poor-signal": "Señal pobre",
   "symptom-stop": "Síntoma → detener",
+  "inexperienced-runner": "Novato irregular",
 };
 
 /**
@@ -125,6 +126,7 @@ export const REASON_LABELS: Record<string, string> = {
   low_interpretability: "contexto poco claro",
   increase_not_easy_block: "subida fuera de bloque easy",
   increase_blocked_by_safety: "seguridad impide subir",
+  increase_at_heart_rate_zone_ceiling: "FC en el techo de la zona objetivo",
   disproportionate_effort_risk: "esfuerzo desproporcionado",
   cooldown_no_opposite_change: "espera tras cambio de ritmo",
   recover_reevaluation_pending: "reevaluación de recuperar pendiente",
