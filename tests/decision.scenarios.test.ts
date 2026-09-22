@@ -165,7 +165,7 @@ describe("spec test 6: uphill does not read slow pace as a need to increase", ()
 });
 
 describe("cheap scenario-level checks", () => {
-  it("inexperienced-runner: erratic evidence and HR spikes never earn an increase", async () => {
+  it("inexperienced-runner: warm-up allows limited increases, racing phase stays conservative", async () => {
     const { traces } = await runScenarioPipeline("inexperienced-runner", { historyCount: 10 });
 
     // Every second of the race gets a decision, in order.
@@ -176,11 +176,21 @@ describe("cheap scenario-level checks", () => {
     expect(actions).not.toContain("stop_and_escalate");
     expect(actions).not.toContain("insufficient_data");
 
-    // Erratic evidence, HR swings and RPE jumps must read as fatigue, not
-    // headroom: the mock stays conservative and never suggests an increase.
-    // Observed distribution for seed 42 / history 10: recover 571,
-    // decrease_gently 26, maintain 3, increase_gently 0.
-    expect(actions).not.toContain("increase_gently");
+    // Warm-up (first 4 minutes, slow and steady): the runner is clearly
+    // under-working, so limited increases are expected and allowed.
+    const warmup = traces.filter((t) => t.second <= 240);
+    expect(warmup.some((t) => t.action === "increase_gently")).toBe(true);
+    for (const t of warmup.filter((t) => t.action === "increase_gently")) {
+      expect(t.reasonCodes).toContain("increase_adjustment_limited_5_10_sec_per_km");
+    }
+
+    // Racing phase (erratic sawtooth + HR swings): fatigue evidence, so the
+    // mock stays conservative — no increases after the warm-up.
+    // Observed distribution for seed 42 / history 10: warmup increase 149,
+    // decrease 44, maintain 47; racing recover 331, decrease 7, maintain 22.
+    const racing = traces.filter((t) => t.second > 240);
+    expect(racing.some((t) => t.action === "recover")).toBe(true);
+    expect(racing.map((t) => t.action)).not.toContain("increase_gently");
   });
 
   it("poor-signal never produces increase_gently and flags insufficient data in gaps", async () => {

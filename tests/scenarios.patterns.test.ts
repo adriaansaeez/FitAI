@@ -98,32 +98,52 @@ describe("scenario defining patterns", () => {
     expect(Math.min(...validPaces)).toBeGreaterThanOrEqual(290);
     expect(Math.max(...validPaces)).toBeLessThanOrEqual(415);
 
-    // Pace is genuinely erratic: novice sawtooth, far noisier than the
-    // easy-under-target signal (stdDev ~1.5 there).
-    const paceMean = mean(validPaces);
+    // Pace is genuinely erratic in the racing phase: novice sawtooth, far
+    // noisier than the easy-under-target signal (stdDev ~1.5 there).
+    // Warm-up (second <= 240) is a slow, steady jog; the sawtooth starts at 241.
+    const warmupSamples = samples.filter((s) => s.second <= 240);
+    const racingSamples = samples.filter((s) => s.second > 240);
+    expect(warmupSamples).toHaveLength(240);
+    expect(racingSamples).toHaveLength(360);
+    const warmupPaces = warmupSamples
+      .map((s) => s.paceSecPerKm)
+      .filter((v): v is number => v !== null);
+    // Warm-up base pace is 400→392 with a ±12 s/km sine wobble plus noise
+    // (sd 5), so the observed floor is ~376; keep a round 375 bound.
+    expect(Math.min(...warmupPaces)).toBeGreaterThanOrEqual(375);
+    expect(Math.max(...warmupPaces)).toBeLessThanOrEqual(415);
+
+    const racingPaces = racingSamples
+      .map((s) => s.paceSecPerKm)
+      .filter((v): v is number => v !== null);
+    const paceMean = mean(racingPaces);
     const paceStdDev = Math.sqrt(
-      mean(validPaces.map((p) => (p - paceMean) ** 2)),
+      mean(racingPaces.map((p) => (p - paceMean) ** 2)),
     );
     expect(paceStdDev).toBeGreaterThan(25);
-    expect(Math.max(...validPaces) - Math.min(...validPaces)).toBeGreaterThan(80);
+    expect(Math.max(...racingPaces) - Math.min(...racingPaces)).toBeGreaterThan(80);
 
-    // HR: always present, bounded, and swinging hard.
+    // HR: always present, bounded everywhere, and swinging hard in the racing
+    // phase (warm-up HR drifts gently between ~132 and ~150).
     const hrs = samples
       .map((s) => s.heartRateBpm)
       .filter((v): v is number => v !== null);
     expect(hrs).toHaveLength(samples.length);
     expect(Math.min(...hrs)).toBeGreaterThanOrEqual(120);
     expect(Math.max(...hrs)).toBeLessThanOrEqual(186);
-    expect(Math.max(...hrs) - Math.min(...hrs)).toBeGreaterThan(35);
+    const racingHrs = racingSamples
+      .map((s) => s.heartRateBpm)
+      .filter((v): v is number => v !== null);
+    expect(Math.max(...racingHrs) - Math.min(...racingHrs)).toBeGreaterThan(35);
 
-    // HR lags pace: in the first 120 s cycle, the fastest pace happens
-    // before the HR peak (surge first, HR follows).
-    const firstCycle = samples.slice(0, 120);
-    const minPaceSecond = firstCycle.reduce(
+    // HR lags pace: in the first racing cycle (seconds 241..360), the fastest
+    // pace happens before the HR peak (surge first, HR follows).
+    const firstRacingCycle = racingSamples.filter((s) => s.second <= 360);
+    const minPaceSecond = firstRacingCycle.reduce(
       (best, s) => ((s.paceSecPerKm ?? Infinity) < best.pace ? { second: s.second, pace: s.paceSecPerKm ?? Infinity } : best),
       { second: 0, pace: Infinity },
     ).second;
-    const maxHrSecond = firstCycle.reduce(
+    const maxHrSecond = firstRacingCycle.reduce(
       (best, s) => ((s.heartRateBpm ?? -Infinity) > best.hr ? { second: s.second, hr: s.heartRateBpm ?? -Infinity } : best),
       { second: 0, hr: -Infinity },
     ).second;
@@ -131,15 +151,19 @@ describe("scenario defining patterns", () => {
     expect(maxHrSecond).toBeGreaterThan(0);
     expect(minPaceSecond).toBeLessThan(maxHrSecond);
 
-    // RPE checkpoints (every 30 s) jump within [4, 8]; both ends occur.
+    // RPE checkpoints (every 30 s): warm-up sits at 3; racing jumps within
+    // [4, 8] and both ends occur.
     const rpeCheckpoints = samples
       .filter((s) => s.second % 30 === 0)
       .map((s) => s.rpe)
       .filter((v): v is number => v !== null);
     expect(rpeCheckpoints).toHaveLength(20);
-    expect(rpeCheckpoints.every((r) => r >= 4 && r <= 8)).toBe(true);
-    expect(rpeCheckpoints).toContain(4);
-    expect(rpeCheckpoints).toContain(8);
+    const warmupRpeCheckpoints = rpeCheckpoints.slice(0, 8);
+    const racingRpeCheckpoints = rpeCheckpoints.slice(8);
+    expect(warmupRpeCheckpoints.every((r) => r === 3)).toBe(true);
+    expect(racingRpeCheckpoints.every((r) => r >= 4 && r <= 8)).toBe(true);
+    expect(racingRpeCheckpoints).toContain(4);
+    expect(racingRpeCheckpoints).toContain(8);
 
     // Signal stays clean; no symptoms in this scenario.
     expect(samples.every((s) => s.signalQuality === "high")).toBe(true);

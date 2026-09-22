@@ -287,22 +287,26 @@ function readScenarioSample(
     }
 
     case "inexperienced-runner": {
-      // Novice sawtooth pacing: 120 s cycle. First 40 s quadratic surge
-      // (340 -> 295 s/km), next 80 s linear fade (295 -> 410 s/km).
+      // Novice pacing: first 4 minutes a slow, uncertain warm-up jog, then
+      // an erratic sawtooth (120 s cycle: quadratic surge 340 -> 295 s/km,
+      // linear fade 295 -> 410 s/km) once the runner "settles" into racing.
       const t = second % 120;
-      const basePace =
-        t < 40
+      const warmup = second <= 240;
+      const basePace = warmup
+        ? 400 - 8 * (second / 240) + 12 * Math.sin((2 * Math.PI * second) / 60)
+        : t < 40
           ? 340 - 45 * (t / 40) ** 2
           : 295 + 115 * ((t - 40) / 80);
-      const pace = basePace + rngGauss(rng, 0, 4);
+      const pace = basePace + rngGauss(rng, 0, warmup ? 5 : 4);
       // HR lags the surges: phase-shifted sine plus slow upward drift.
-      const hr =
+      const warmupHr = 132 + 6 * Math.sin((2 * Math.PI * second) / 60 - 0.5) + second * 0.02;
+      const racingHr =
         150 +
         28 * Math.sin((2 * Math.PI * second) / 120 - 0.9) +
-        second * 0.004 +
-        rngGauss(rng, 0, 3);
+        second * 0.004;
+      const hr = warmup ? warmupHr : racingHr + (second - 240) * 0.01;
       // Surge intensity 0..1 derived from how far below the cycle-start pace.
-      const surgeIntensity = Math.min(1, Math.max(0, (340 - basePace) / 45));
+      const surgeIntensity = warmup ? 0 : Math.min(1, Math.max(0, (340 - basePace) / 45));
       return {
         paceSecPerKm: round1(Math.min(415, Math.max(290, pace))),
         heartRateBpm: Math.round(Math.min(186, Math.max(120, hr))),
@@ -310,7 +314,9 @@ function readScenarioSample(
         signalQuality: "high",
         dataAgeSeconds: second % 3 === 0 ? 1 : 0,
         rpe: rpeCheckpoint
-          ? 4 + Math.round(4 * (0.5 + 0.5 * Math.sin((2 * Math.PI * second) / 120 - 0.9)))
+          ? warmup
+            ? 3
+            : 4 + Math.round(4 * (0.5 + 0.5 * Math.sin((2 * Math.PI * second) / 120 - 0.9)))
           : null,
         goodSample: true,
       };
