@@ -413,7 +413,7 @@ describe("message template integration", () => {
     ).toContain("8 s/km");
     expect(
       renderDecisionMessage("decision.increase_gently.increase_adjustment_limited_5_10_sec_per_km"),
-    ).toContain("5 y 10 s/km");
+    ).toContain("5 to 10 s/km");
     expect(resolveDecisionMessageKey("maintain", "unknown_reason")).toBe("decision.maintain");
     expect(renderDecisionMessage("decision.unknown_key")).toBe("decision.unknown_key");
   });

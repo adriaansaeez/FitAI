@@ -1,5 +1,5 @@
 /**
- * Spanish runner-facing labels for the demo UI, plus formatting helpers.
+ * English runner-facing labels for the demo UI, plus formatting helpers.
  *
  * All runner-facing strings live here or in src/domain/messageTemplates.ts;
  * no model free text is ever rendered.
@@ -14,22 +14,22 @@ import type { ScenarioId } from "@/simulation/scenarios";
 import type { DataSource } from "./useRaceSimulation";
 
 export const ACTION_LABELS: Record<DecisionAction, string> = {
-  increase_gently: "Subir suave",
-  maintain: "Mantener",
-  decrease_gently: "Bajar suave",
-  recover: "Recuperar",
-  insufficient_data: "Datos insuficientes",
-  stop_and_escalate: "Detener y escalar",
+  increase_gently: "Increase gently",
+  maintain: "Maintain",
+  decrease_gently: "Ease off",
+  recover: "Recover",
+  insufficient_data: "Insufficient data",
+  stop_and_escalate: "Stop and escalate",
 };
 
 /** Short labels for the decision chart Y axis. */
 export const ACTION_SHORT_LABELS: Record<DecisionAction, string> = {
-  increase_gently: "Subir",
-  maintain: "Mantener",
-  decrease_gently: "Bajar",
-  recover: "Recuperar",
-  insufficient_data: "Insuf.",
-  stop_and_escalate: "Detener",
+  increase_gently: "Up",
+  maintain: "Hold",
+  decrease_gently: "Down",
+  recover: "Recover",
+  insufficient_data: "Low",
+  stop_and_escalate: "Stop",
 };
 
 /** Sober traffic-light palette. Safety and stops dominate visually. */
@@ -65,19 +65,19 @@ export const LEVEL_ACTION: Record<number, DecisionAction> = {
 };
 
 export const SOURCE_LABELS: Record<DecisionTrace["source"], string> = {
-  safety: "Seguridad",
-  mock: "Simulación",
+  safety: "Safety",
+  mock: "Simulation",
   jev: "Jev",
-  composer: "Compositor",
+  composer: "Composer",
 };
 
 export const SCENARIO_LABELS: Record<ScenarioId, string> = {
-  "easy-under-target": "Fácil bajo objetivo",
-  "cardiac-drift": "Deriva cardíaca",
-  uphill: "Subida",
-  "poor-signal": "Señal pobre",
-  "symptom-stop": "Síntoma → detener",
-  "inexperienced-runner": "Novato irregular",
+  "easy-under-target": "Easy, under target",
+  "cardiac-drift": "Cardiac drift",
+  uphill: "Uphill",
+  "poor-signal": "Poor signal",
+  "symptom-stop": "Symptom → stop",
+  "inexperienced-runner": "Erratic novice",
 };
 
 /**
@@ -85,59 +85,59 @@ export const SCENARIO_LABELS: Record<ScenarioId, string> = {
  * telemetry (spec: real-race validation, item 8).
  */
 export const SOURCE_KIND_LABELS: Record<DataSource, string> = {
-  synthetic: "Escenario sintético",
-  real: "Carrera real: Kona 2022 — Gustav Iden",
+  synthetic: "Synthetic scenario",
+  real: "Real race: Kona 2022 — Gustav Iden",
 };
 
 /** Static note shown instead of the interval select in real mode (60 s cadence). */
-export const REAL_MODE_INTERVAL_LABEL = "Intervalo de evaluación: 60 s (modo real)";
+export const REAL_MODE_INTERVAL_LABEL = "Evaluation interval: 60 s (real mode)";
 
 /** Note under the disabled history select in real mode. */
-export const REAL_MODE_HISTORY_NOTE = "Historial no publicado";
+export const REAL_MODE_HISTORY_NOTE = "History not published";
 
 /** Permanent attribution + limitations banner shown while real mode is active. */
 export const REAL_MODE_ATTRIBUTION =
-  "Telemetría real por Entalpi (CC BY-NC 4.0) — RPE, síntomas y plan de carrera no publicados; las decisiones son validación de coherencia, no diagnóstico.";
+  "Real telemetry by Entalpi (CC BY-NC 4.0) — RPE, symptoms, and race plan not published; decisions are consistency validation, not diagnosis.";
 
 export const SIGNAL_QUALITY_LABELS: Record<string, string> = {
-  high: "Alta",
-  medium: "Media",
-  low: "Baja",
+  high: "High",
+  medium: "Medium",
+  low: "Low",
 };
 
-/** Short labels for the table's Historial column. */
+/** Short labels for the table's History column. */
 export const MATURITY_SHORT_LABELS: Record<DecisionTrace["derivedMetrics"]["historyMaturity"], string> = {
   none: "—",
   early: "Provisional",
-  established: "Establecida",
+  established: "Established",
 };
 
 export const MATURITY_LABELS: Record<DecisionTrace["derivedMetrics"]["historyMaturity"], string> = {
-  none: "Sin referencia personal; confianza limitada",
-  early: "Referencia provisional (1–3 sesiones)",
-  established: "Referencia establecida (4–10 sesiones)",
+  none: "No personal reference; limited confidence",
+  early: "Provisional reference (1–3 sessions)",
+  established: "Established reference (4–10 sessions)",
 };
 
-/** Spanish labels for composer/safety reason codes shown to the reader. */
+/** English labels for composer/safety reason codes shown to the reader. */
 export const REASON_LABELS: Record<string, string> = {
-  provider_unavailable: "proveedor no disponible",
-  low_choice_confidence: "baja confianza de la elección",
-  choice_confidence_missing: "confianza de la elección ausente",
-  low_interpretability: "contexto poco claro",
-  increase_not_easy_block: "subida fuera de bloque easy",
-  increase_blocked_by_safety: "seguridad impide subir",
-  increase_at_heart_rate_zone_ceiling: "FC en el techo de la zona objetivo",
-  disproportionate_effort_risk: "esfuerzo desproporcionado",
-  cooldown_no_opposite_change: "espera tras cambio de ritmo",
-  recover_reevaluation_pending: "reevaluación de recuperar pendiente",
-  increase_adjustment_limited_5_10_sec_per_km: "subida limitada a 5–10 s/km",
-  decrease_adjustment_limited_5_15_sec_per_km: "bajada limitada a 5–15 s/km",
-  symptoms_reported: "síntoma reportado",
-  low_signal_quality: "señal de baja calidad",
-  stale_data: "datos retrasados",
-  auto_paused: "autopausa",
-  missing_required_metrics: "faltan ritmo o FC",
-  no_increase_in_block: "el bloque no permite subir",
+  provider_unavailable: "provider unavailable",
+  low_choice_confidence: "low choice confidence",
+  choice_confidence_missing: "choice confidence missing",
+  low_interpretability: "unclear context",
+  increase_not_easy_block: "increase outside easy block",
+  increase_blocked_by_safety: "safety blocks increase",
+  increase_at_heart_rate_zone_ceiling: "HR at target zone ceiling",
+  disproportionate_effort_risk: "disproportionate effort",
+  cooldown_no_opposite_change: "cooldown after pace change",
+  recover_reevaluation_pending: "recover reevaluation pending",
+  increase_adjustment_limited_5_10_sec_per_km: "increase limited to 5–10 s/km",
+  decrease_adjustment_limited_5_15_sec_per_km: "decrease limited to 5–15 s/km",
+  symptoms_reported: "symptom reported",
+  low_signal_quality: "low-quality signal",
+  stale_data: "stale data",
+  auto_paused: "auto-paused",
+  missing_required_metrics: "missing pace or HR",
+  no_increase_in_block: "block does not allow increase",
 };
 
 export function reasonLabel(code: string): string {
@@ -149,7 +149,7 @@ export function primaryReason(trace: DecisionTrace): string | null {
 }
 
 /**
- * Final runner-facing rule message: the most specific Spanish template for
+ * Final runner-facing rule message: the most specific English template for
  * the action + primary reason, rendered with the pilot adjustment limits.
  */
 export function finalRuleMessage(trace: DecisionTrace): string {
@@ -177,10 +177,10 @@ export function formatPaceVsTarget(delta: number | null | undefined): string {
     return "—";
   }
   if (delta === 0) {
-    return "Dentro del rango objetivo";
+    return "Within target range";
   }
   const sign = delta > 0 ? "+" : "−";
-  return `${sign}${Math.abs(Math.round(delta))} s/km vs objetivo`;
+  return `${sign}${Math.abs(Math.round(delta))} s/km vs target`;
 }
 
 export function formatConfidence(confidence: number | undefined): string {
@@ -188,7 +188,7 @@ export function formatConfidence(confidence: number | undefined): string {
 }
 
 export function formatBpm(bpm: number | null | undefined): string {
-  return bpm === null || bpm === undefined ? "—" : `${Math.round(bpm)} ppm`;
+  return bpm === null || bpm === undefined ? "—" : `${Math.round(bpm)} bpm`;
 }
 
 /** mm:ss tick label for chart X axes (seconds). */

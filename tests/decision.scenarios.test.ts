@@ -105,7 +105,7 @@ describe("spec test 4: easy-under-target with established history can produce a 
     expect(traces.some((t) => t.action === "insufficient_data")).toBe(false);
   });
 
-  it("the increase message renders the 5-10 s/km limit in Spanish", async () => {
+  it("the increase message renders the 5-10 s/km limit", async () => {
     const { traces } = await runScenarioPipeline("easy-under-target", { historyCount: 10 });
     const increase = traces.find((t) => t.action === "increase_gently");
     if (increase === undefined) throw new Error("expected an increase trace");
@@ -114,7 +114,7 @@ describe("spec test 4: easy-under-target with established history can produce a 
       increase.reasonCodes[increase.reasonCodes.length - 1] ?? null,
     );
     const message = renderDecisionMessage(key);
-    expect(message).toContain("5 y 10 s/km");
+    expect(message).toContain("5 to 10 s/km");
   });
 });
 

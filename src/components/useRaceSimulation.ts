@@ -23,6 +23,7 @@ import type {
   SessionDescriptor,
   TrainingBlock,
 } from "@/domain/types";
+import { DEFAULT_HEART_RATE_ZONES, type HeartRateZone } from "@/domain/heartRateZones";
 import { computeDerivedMetrics, type AthleteBaseline } from "@/domain/metrics";
 import {
   evaluateDecisionAgainstObserved,
@@ -75,6 +76,7 @@ interface DecideBody {
   historyCount: HistoryCount;
   previousDecision: DecisionTrace | null;
   callJev: boolean;
+  heartRateZones: HeartRateZone[];
 }
 
 /** Where the simulated samples come from. */
@@ -208,6 +210,8 @@ export interface RaceSimulation {
   setJevInterval: (interval: JevInterval) => void;
   speed: Speed;
   setSpeed: (speed: Speed) => void;
+  heartRateZones: HeartRateZone[];
+  setHeartRateZones: (zones: HeartRateZone[]) => void;
 
   // data source (synthetic scenarios vs the real Kona 2022 telemetry)
   dataSource: DataSource;
@@ -261,6 +265,9 @@ export function useRaceSimulation(): RaceSimulation {
   const [provider, setProviderState] = useState<ProviderChoice>("mock");
   const [jevInterval, setJevIntervalState] = useState<JevInterval>(5);
   const [speed, setSpeedState] = useState<Speed>(1);
+  const [heartRateZones, setHeartRateZonesState] = useState<HeartRateZone[]>(
+    () => DEFAULT_HEART_RATE_ZONES.map((zone) => ({ ...zone })),
+  );
 
   // Real-race mode (Kona 2022): data source, seed/duration controls and the
   // window fetched from GET /api/race-window.
@@ -353,6 +360,7 @@ export function useRaceSimulation(): RaceSimulation {
     block,
     paceTarget,
     baseline,
+    heartRateZones,
     samples,
     isRealMode,
     realReady,
@@ -365,6 +373,7 @@ export function useRaceSimulation(): RaceSimulation {
     block,
     paceTarget,
     baseline,
+    heartRateZones,
     samples,
     isRealMode,
     realReady,
@@ -395,7 +404,7 @@ export function useRaceSimulation(): RaceSimulation {
   // Changing scenario, history, or the real-race source invalidates the run.
   useEffect(() => {
     resetRun();
-  }, [scenarioId, historyCount, dataSource, realSeed, realDurationOverride, resetRun]);
+  }, [scenarioId, historyCount, dataSource, realSeed, realDurationOverride, heartRateZones, resetRun]);
 
   // Real window fetch: /api/race-window?seed=..[&durationSeconds=..]. Runs
   // only in real mode; a failed load is surfaced via realStatus + failureNote
@@ -425,7 +434,7 @@ export function useRaceSimulation(): RaceSimulation {
           setRealStatus("error");
           const err = payload as { error?: string; message?: string };
           const hint = err.message ?? err.error ?? "error desconocido";
-          setFailureNote(`Carrera real: no se pudo cargar la ventana (${hint}).`);
+          setFailureNote(`Real race: could not load the window (${hint}).`);
           return;
         }
         setRealWindow(payload.window);
@@ -435,7 +444,7 @@ export function useRaceSimulation(): RaceSimulation {
         if (!cancelled) {
           setRealStatus("error");
           setFailureNote(
-            "Carrera real: fallo de red al cargar la ventana de telemetría (/api/race-window).",
+            "Real race: network failure while loading the telemetry window (/api/race-window).",
           );
         }
       });
@@ -488,6 +497,7 @@ export function useRaceSimulation(): RaceSimulation {
         historyCount: cfg.historyCount,
         previousDecision: prev?.trace ?? null,
         callJev,
+        heartRateZones: cfg.heartRateZones,
       });
       if (runId !== runIdRef.current) {
         // Run was reset while the request was in flight.
@@ -500,7 +510,7 @@ export function useRaceSimulation(): RaceSimulation {
         throw new Error("run_reset_during_fetch");
       }
       setFailureNote(
-        `Fallo al contactar el proveedor de decisiones en el segundo ${second}: se mantiene el ritmo y la simulación continúa.`,
+        `Failed to reach the decision provider at second ${second}: holding pace and the simulation continues.`,
       );
       // Composer-equivalent fallback computed from the pure domain modules.
       const metrics = computeDerivedMetrics({
@@ -509,6 +519,8 @@ export function useRaceSimulation(): RaceSimulation {
         targetPaceSecPerKm: cfg.paceTarget,
         baseline: cfg.baseline,
         comparableHistoryCount: cfg.historyCount,
+        block: cfg.block,
+        heartRateZones: cfg.heartRateZones,
       });
       const safety = evaluateSafety(sample, metrics, cfg.block);
       const trace: DecisionTrace = {
@@ -628,6 +640,10 @@ export function useRaceSimulation(): RaceSimulation {
     setSpeedState(value);
   }, []);
 
+  const setHeartRateZones = useCallback((zones: HeartRateZone[]) => {
+    setHeartRateZonesState(zones);
+  }, []);
+
   const setDataSource = useCallback((source: DataSource) => {
     setDataSourceState(source);
   }, []);
@@ -677,6 +693,8 @@ export function useRaceSimulation(): RaceSimulation {
     setJevInterval,
     speed,
     setSpeed,
+    heartRateZones,
+    setHeartRateZones,
     dataSource,
     setDataSource,
     realSeed,

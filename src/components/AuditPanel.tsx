@@ -3,7 +3,7 @@
 /**
  * Audit panel for the selected second: derived metrics, safety guard results,
  * the four Jev questions with probabilities when present in the trace, the
- * final rule, the "decisión reutilizada" mark, and the real-race data origin
+ * final rule, the "reused decision" mark, and the real-race data origin
  * card (spec: real-race validation, item 6).
  */
 
@@ -11,6 +11,7 @@ import type { AthleteBaseline } from "@/domain/metrics";
 import type { RaceDecisionEvaluation } from "@/domain/evaluation";
 import type { RunningSample } from "@/domain/types";
 import type { DecisionEntry } from "./useRaceSimulation";
+import { heartRateZoneLabel } from "@/domain/heartRateZones";
 import type { DataSource, RealRaceWindowPayload } from "./useRaceSimulation";
 import {
   ACTION_COLORS,
@@ -54,49 +55,49 @@ function evaluationActionLabel(action: string): string {
 
 /** Format an HR trend in bpm/min, em dash when unavailable. */
 function formatHrTrend(bpmPerMin: number | null): string {
-  return bpmPerMin === null ? "—" : `${bpmPerMin.toFixed(2)} ppm/min`;
+  return bpmPerMin === null ? "—" : `${bpmPerMin.toFixed(2)} bpm/min`;
 }
 
 /**
  * Sixth audit card: the decision compared against the telemetry that followed
- * it (spec: "Qué se compara y qué no"). Observational only — the human
+ * it (spec: "What is compared and what is not"). Observational only — the human
  * videoReview/assessment labels are never inferred nor rendered as assigned.
  */
 function ObservedComparisonCard({ evaluation }: { evaluation: RaceDecisionEvaluation }) {
   return (
     <div className="audit-card">
-      <h3>Comparación observada</h3>
+      <h3>Observed comparison</h3>
       <dl className="audit-metrics">
         <Metric
-          label="Decisión evaluada"
+          label="Decision evaluated"
           value={`${evaluationActionLabel(evaluation.action)} · s ${evaluation.decisionSecond}`}
         />
         <Metric
-          label="Ritmo medio 60 s siguientes"
+          label="Mean pace next 60 s"
           value={formatPace(evaluation.observedNext60s?.meanPaceSecPerKm ?? null)}
         />
         <Metric
-          label="FC media 60 s siguientes"
+          label="Mean HR next 60 s"
           value={formatBpm(evaluation.observedNext60s?.meanHeartRateBpm ?? null)}
         />
         <Metric
-          label="Tendencia FC 60 s siguientes"
+          label="HR trend next 60 s"
           value={formatHrTrend(evaluation.observedNext60s?.hrTrendBpmPerMin ?? null)}
         />
         <Metric
-          label="Ritmo medio 90 s siguientes"
+          label="Mean pace next 90 s"
           value={formatPace(evaluation.observedNext90s?.meanPaceSecPerKm ?? null)}
         />
         <Metric
-          label="FC media 90 s siguientes"
+          label="Mean HR next 90 s"
           value={formatBpm(evaluation.observedNext90s?.meanHeartRateBpm ?? null)}
         />
         <Metric
-          label="Tendencia FC 90 s siguientes"
+          label="HR trend next 90 s"
           value={formatHrTrend(evaluation.observedNext90s?.hrTrendBpmPerMin ?? null)}
         />
         <Metric
-          label="Delta elevación (90 s siguientes)"
+          label="Elevation delta (next 90 s)"
           value={
             evaluation.terrainDelta.elevationDeltaM === null
               ? "—"
@@ -104,7 +105,7 @@ function ObservedComparisonCard({ evaluation }: { evaluation: RaceDecisionEvalua
           }
         />
         <Metric
-          label="Pendiente media (90 s siguientes)"
+          label="Mean grade (next 90 s)"
           value={
             evaluation.terrainDelta.meanGradePct === null
               ? "—"
@@ -113,8 +114,8 @@ function ObservedComparisonCard({ evaluation }: { evaluation: RaceDecisionEvalua
         />
       </dl>
       <p className="note">
-        Sólo observación: el vídeo y la etiqueta humana (assessment) se asignan
-        fuera de la aplicación; una aceleración posterior nunca valida una subida.
+        Observation only: video and the human assessment label are assigned
+        outside the app; a later acceleration never validates an increase.
       </p>
     </div>
   );
@@ -123,27 +124,27 @@ function ObservedComparisonCard({ evaluation }: { evaluation: RaceDecisionEvalua
 function RealOriginCard({ realWindow }: { realWindow: RealRaceWindowPayload }) {
   return (
     <div className="audit-card">
-      <h3>Origen de datos</h3>
+      <h3>Data origin</h3>
       <dl className="audit-metrics">
-        <Metric label="Atleta" value={realWindow.source.athlete} />
-        <Metric label="Evento" value={realWindow.source.event} />
-        <Metric label="Licencia" value={realWindow.source.license} />
+        <Metric label="Athlete" value={realWindow.source.athlete} />
+        <Metric label="Event" value={realWindow.source.event} />
+        <Metric label="License" value={realWindow.source.license} />
         <Metric
           label="SHA-256"
           value={formatSha256(realWindow.source.sha256)}
           title={realWindow.source.sha256}
         />
-        <Metric label="Semilla" value={String(realWindow.seed)} />
-        <Metric label="Índice fuente inicial" value={String(realWindow.startSourceIndex)} />
+        <Metric label="Seed" value={String(realWindow.seed)} />
+        <Metric label="Start source index" value={String(realWindow.startSourceIndex)} />
         <Metric label="Preroll" value={`${realWindow.prerollSeconds} s`} />
-        <Metric label="Duración visible" value={`${realWindow.visibleDurationSeconds} s`} />
+        <Metric label="Visible duration" value={`${realWindow.visibleDurationSeconds} s`} />
         <Metric
-          label="Ventana"
+          label="Window"
           value={`${realWindow.startTimestamp} → ${realWindow.endTimestamp}`}
         />
       </dl>
-      <p className="note">Cadencia: {realWindow.cadenceSemantics}</p>
-      <p className="note">Síntomas: {realWindow.symptomsSource}</p>
+      <p className="note">Cadence: {realWindow.cadenceSemantics}</p>
+      <p className="note">Symptoms: {realWindow.symptomsSource}</p>
     </div>
   );
 }
@@ -167,8 +168,8 @@ export function AuditPanel({
 }) {
   if (entry === null || sample === null) {
     return (
-      <section className="audit" aria-label="Auditoría de la decisión">
-        <p className="note">Selecciona un segundo en las gráficas o en la tabla para auditar su decisión.</p>
+      <section className="audit" aria-label="Decision audit">
+        <p className="note">Select a second in the charts or in the table to audit its decision.</p>
       </section>
     );
   }
@@ -181,51 +182,51 @@ export function AuditPanel({
   // text. Interpretability probabilities arrive as string keys "0" | "1" | "2".
   const interpretabilityText =
     probabilities === undefined
-      ? "No disponible en esta decisión"
-      : `p(inutilizable)=${(probabilities["0"] ?? 0).toFixed(2)} · p(limitado)=${(probabilities["1"] ?? 0).toFixed(2)} · p(claro)=${(probabilities["2"] ?? 0).toFixed(2)}`;
+      ? "Not available for this decision"
+      : `p(unusable)=${(probabilities["0"] ?? 0).toFixed(2)} · p(limited)=${(probabilities["1"] ?? 0).toFixed(2)} · p(clear)=${(probabilities["2"] ?? 0).toFixed(2)}`;
 
   const jevQuestions: Array<{ question: string; answer: string; present: boolean }> = [
     {
-      question: "1 · effort_action (elección de acción)",
-      answer: `${ACTION_LABELS[trace.action]} · confianza ${formatConfidence(trace.confidence)}`,
+      question: "1 · effort_action (action choice)",
+      answer: `${ACTION_LABELS[trace.action]} · confidence ${formatConfidence(trace.confidence)}`,
       present: true,
     },
     {
-      question: "2 · effort_disproportionate (esfuerzo desproporcionado)",
-      answer: "No registrado en la traza; la guarda del compositor la aplica antes",
+      question: "2 · effort_disproportionate (disproportionate effort)",
+      answer: "Not recorded in the trace; the composer guard applies it earlier",
       present: false,
     },
     {
-      question: "3 · context_explanation (explicación del contexto)",
-      answer: "No registrado en la traza; ver códigos de razón",
+      question: "3 · context_explanation (context explanation)",
+      answer: "Not recorded in the trace; see reason codes",
       present: false,
     },
     {
-      question: "4 · context_interpretability (interpretabilidad del contexto)",
+      question: "4 · context_interpretability (context interpretability)",
       answer: interpretabilityText,
       present: probabilities !== undefined,
     },
   ];
 
   return (
-    <section className="audit" aria-label={`Auditoría de la decisión del segundo ${entry.second}`}>
+    <section className="audit" aria-label={`Decision audit for second ${entry.second}`}>
       <h2 className="section-title">
-        Auditoría · segundo {entry.second}
-        {entry.reused ? <span className="badge badge-reused">decisión reutilizada</span> : null}
-        {entry.fetchFailed ? <span className="badge badge-failed">fallo de red</span> : null}
+        Audit · second {entry.second}
+        {entry.reused ? <span className="badge badge-reused">reused decision</span> : null}
+        {entry.fetchFailed ? <span className="badge badge-failed">network failure</span> : null}
       </h2>
 
       <div className="audit-grid">
         <div className="audit-card">
-          <h3>Decisión</h3>
+          <h3>Decision</h3>
           <p className="audit-action" style={{ color: ACTION_COLORS[trace.action] }}>
             {ACTION_LABELS[trace.action]}
           </p>
           <p>
-            Origen: {SOURCE_LABELS[trace.source]} · Confianza: {formatConfidence(trace.confidence)}
+            Source: {SOURCE_LABELS[trace.source]} · Confidence: {formatConfidence(trace.confidence)}
           </p>
           <p className="audit-rule">
-            <strong>Regla final:</strong> {finalRuleMessage(trace)}
+            <strong>Final rule:</strong> {finalRuleMessage(trace)}
           </p>
           {trace.reasonCodes.length > 0 ? (
             <ul className="reason-list">
@@ -237,34 +238,37 @@ export function AuditPanel({
         </div>
 
         <div className="audit-card">
-          <h3>Métricas derivadas</h3>
+          <h3>Derived metrics</h3>
           <dl className="audit-metrics">
-            <Metric label="Ritmo (ventana)" value={formatPace(metrics.paceWindowSecPerKm)} />
-            <Metric label="FC (ventana)" value={formatBpm(metrics.heartRateWindowBpm)} />
+            <Metric label="Pace (window)" value={formatPace(metrics.paceWindowSecPerKm)} />
+            <Metric label="HR (window)" value={formatBpm(metrics.heartRateWindowBpm)} />
+            <Metric label="Current HR zone" value={heartRateZoneLabel(metrics.heartRateZonePosition ?? null)} />
+            <Metric label="Target HR zone" value={metrics.targetHeartRateZoneMin == null ? "—" : `Z${metrics.targetHeartRateZoneMin}–Z${metrics.targetHeartRateZoneMax}`} />
+            <Metric label="Time above zone ceiling" value={`${metrics.consecutiveSecondsAboveHeartRateZone ?? 0} s`} />
             <Metric
-              label="Tendencia FC"
+              label="HR trend"
               value={metrics.hrTrendBpmPerMin === null ? "—" : `${metrics.hrTrendBpmPerMin.toFixed(2)} ppm/min`}
             />
-            <Metric label="Ritmo vs objetivo" value={formatPaceVsTarget(metrics.paceVsTargetSeconds)} />
-            <Metric label="Sesiones comparables" value={String(metrics.comparableHistoryCount)} />
-            <Metric label="Madurez del historial" value={MATURITY_LABELS[metrics.historyMaturity]} />
+            <Metric label="Pace vs target" value={formatPaceVsTarget(metrics.paceVsTargetSeconds)} />
+            <Metric label="Comparable sessions" value={String(metrics.comparableHistoryCount)} />
+            <Metric label="History maturity" value={MATURITY_LABELS[metrics.historyMaturity]} />
             <Metric
-              label="Delta ritmo vs histórico"
+              label="Pace delta vs history"
               value={metrics.historicalPaceDeltaSeconds === null ? "—" : `${metrics.historicalPaceDeltaSeconds.toFixed(1)} s/km`}
             />
             <Metric
-              label="Delta FC vs histórico"
+              label="HR delta vs history"
               value={metrics.historicalHrDeltaBpm === null ? "—" : `${metrics.historicalHrDeltaBpm.toFixed(1)} ppm`}
             />
           </dl>
         </div>
 
         <div className="audit-card">
-          <h3>Guardas de seguridad</h3>
+          <h3>Safety guards</h3>
           <ul className="reason-list">
-            <li>Parada dura: {trace.safety.hardStop ? "sí" : "no"}</li>
-            <li>Permitido subir intensidad: {trace.safety.mayIncreaseIntensity ? "sí" : "no"}</li>
-            <li>Faltan métricas requeridas: {trace.safety.missingRequiredMetric ? "sí" : "no"}</li>
+            <li>Hard stop: {trace.safety.hardStop ? "yes" : "no"}</li>
+            <li>May increase intensity: {trace.safety.mayIncreaseIntensity ? "yes" : "no"}</li>
+            <li>Missing required metrics: {trace.safety.missingRequiredMetric ? "yes" : "no"}</li>
           </ul>
           {trace.safety.reasonCodes.length > 0 ? (
             <ul className="reason-list">
@@ -273,12 +277,12 @@ export function AuditPanel({
               ))}
             </ul>
           ) : (
-            <p className="note">Sin códigos de seguridad activos.</p>
+            <p className="note">No active safety codes.</p>
           )}
         </div>
 
         <div className="audit-card">
-          <h3>Preguntas de Jev</h3>
+          <h3>Jev questions</h3>
           <ul className="jev-questions">
             {jevQuestions.map((item) => (
               <li key={item.question} className={item.present ? undefined : "jev-question-missing"}>
@@ -297,8 +301,8 @@ export function AuditPanel({
           <RealOriginCard realWindow={realWindow} />
         ) : (
           <div className="audit-card">
-            <h3>Origen de datos</h3>
-            <p className="note">Escenario sintético</p>
+            <h3>Data origin</h3>
+            <p className="note">Synthetic scenario</p>
           </div>
         )}
       </div>

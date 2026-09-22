@@ -24,6 +24,22 @@ import {
 import { HISTORY_COUNT_OPTIONS } from "@/simulation/history";
 import { SCENARIO_IDS } from "@/simulation/scenarios";
 import type { HistoryCount } from "@/simulation/history";
+import type { HeartRateZone } from "@/domain/heartRateZones";
+
+type ZoneDraft = { minBpm: string; maxBpm: string };
+
+function toZoneConfig(drafts: readonly ZoneDraft[]): HeartRateZone[] | null {
+  if (drafts.length !== 5) return null;
+  const zones = drafts.map((draft, index) => ({
+    zone: (index + 1) as HeartRateZone["zone"],
+    minBpm: Number(draft.minBpm),
+    maxBpm: Number(draft.maxBpm),
+  }));
+  if (zones.some((zone) => !Number.isInteger(zone.minBpm) || !Number.isInteger(zone.maxBpm) || zone.minBpm <= 0 || zone.minBpm > zone.maxBpm)) return null;
+  return zones.every((zone, index) => index === 0 || zone.minBpm === zones[index - 1]!.maxBpm + 1)
+    ? zones
+    : null;
+}
 
 /** Client-side bounds for the optional real-mode visible duration (seconds). */
 const REAL_DURATION_MIN = 600;
@@ -31,6 +47,21 @@ const REAL_DURATION_MAX = 1800;
 
 export function ControlsBar({ sim }: { sim: RaceSimulation }) {
   const isRealMode = sim.dataSource === "real";
+  const [zoneDrafts, setZoneDrafts] = useState<ZoneDraft[]>(() =>
+    sim.heartRateZones.map((zone) => ({ minBpm: String(zone.minBpm), maxBpm: String(zone.maxBpm) })),
+  );
+  const zonesValid = toZoneConfig(zoneDrafts) !== null;
+
+  const updateZoneDraft = (index: number, field: keyof ZoneDraft, value: string) => {
+    setZoneDrafts((current) => {
+      const next = current.map((draft, draftIndex) =>
+        draftIndex === index ? { ...draft, [field]: value } : draft,
+      );
+      const zones = toZoneConfig(next);
+      if (zones !== null) sim.setHeartRateZones(zones);
+      return next;
+    });
+  };
 
   // Draft text for the optional duration input: committed into the hook only
   // when it parses inside [REAL_DURATION_MIN, REAL_DURATION_MAX]; empty means
@@ -78,13 +109,13 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
     sim.apiMode === "jev" ? (
       <span className="badge badge-jev">Jev</span>
     ) : (
-      <span className="badge badge-mock">Modo simulación</span>
+      <span className="badge badge-mock">Simulation mode</span>
     );
 
   return (
-    <section className="controls" aria-label="Controles de la demo">
+    <section className="controls" aria-label="Demo controls">
       <div className="control-group">
-        <label htmlFor="source-select">Fuente</label>
+        <label htmlFor="source-select">Source</label>
         <select
           id="source-select"
           value={sim.dataSource === "real" ? "real" : sim.scenarioId}
@@ -113,7 +144,7 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
       </div>
 
       <div className="control-group">
-        <label htmlFor="scenario-select">Escenario</label>
+        <label htmlFor="scenario-select">Scenario</label>
         <select
           id="scenario-select"
           value={sim.scenarioId}
@@ -135,7 +166,7 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
       </div>
 
       <div className="control-group">
-        <label htmlFor="history-select">Sesiones históricas</label>
+        <label htmlFor="history-select">History sessions</label>
         <select
           id="history-select"
           value={sim.historyCount}
@@ -158,7 +189,7 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
       </div>
 
       <div className="control-group">
-        <label htmlFor="provider-select">Proveedor</label>
+        <label htmlFor="provider-select">Provider</label>
         <select
           id="provider-select"
           value={sim.provider}
@@ -174,11 +205,44 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
         </select>
       </div>
 
+      <fieldset className="control-group zone-editor" aria-describedby="heart-rate-zones-note">
+        <legend>HR zones (bpm)</legend>
+        <div className="zone-fields">
+          {zoneDrafts.map((zone, index) => (
+            <label key={index} className="zone-field">
+              <span>Z{index + 1}</span>
+              <input
+                aria-label={`Zone ${index + 1}, min`}
+                type="number"
+                min={1}
+                step={1}
+                value={zone.minBpm}
+                onChange={(event) => updateZoneDraft(index, "minBpm", event.target.value)}
+              />
+              <span className="zone-separator" aria-hidden="true">–</span>
+              <input
+                aria-label={`Zone ${index + 1}, max`}
+                type="number"
+                min={1}
+                step={1}
+                value={zone.maxBpm}
+                onChange={(event) => updateZoneDraft(index, "maxBpm", event.target.value)}
+              />
+            </label>
+          ))}
+        </div>
+        <p id="heart-rate-zones-note" className="note" role={zonesValid ? undefined : "alert"}>
+          {zonesValid
+            ? "Zones are contiguous and active. Changing them restarts the simulation."
+            : "Enter five integer zones, contiguous and non-overlapping, with min less than or equal to max."}
+        </p>
+      </fieldset>
+
       <div className="control-group">
         {isRealMode ? (
-          <span className="control-label">Intervalo Jev</span>
+          <span className="control-label">Jev interval</span>
         ) : (
-          <label htmlFor="interval-select">Intervalo Jev</label>
+          <label htmlFor="interval-select">Jev interval</label>
         )}
         {isRealMode ? (
           <p className="note">{REAL_MODE_INTERVAL_LABEL}</p>
@@ -206,7 +270,7 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
       {isRealMode ? (
         <>
           <div className="control-group">
-            <label htmlFor="real-seed-input">Semilla (modo real)</label>
+            <label htmlFor="real-seed-input">Seed (real mode)</label>
             <input
               id="real-seed-input"
               type="number"
@@ -223,34 +287,34 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
           </div>
 
           <div className="control-group">
-            <label htmlFor="real-duration-input">Duración visible (s)</label>
+            <label htmlFor="real-duration-input">Visible duration (s)</label>
             <input
               id="real-duration-input"
               type="number"
               min={REAL_DURATION_MIN}
               max={REAL_DURATION_MAX}
               step={1}
-              placeholder="Aleatoria determinista"
+              placeholder="Deterministic random"
               value={durationDraft}
               onChange={(event) => handleDurationChange(event.target.value)}
               onBlur={handleDurationBlur}
             />
             {durationInvalid ? (
-              <p className="note">Se aplicará un valor entre 600 y 1800 s.</p>
+              <p className="note">A value between 600 and 1800 s will be applied.</p>
             ) : durationDraft.trim() === "" ? (
-              <p className="note">Vacío: duración aleatoria determinista (600–1800 s).</p>
+              <p className="note">Empty: deterministic random duration (600–1800 s).</p>
             ) : null}
           </div>
         </>
       ) : null}
 
-      <div className="control-group" role="group" aria-label="Control de reproducción">
+      <div className="control-group" role="group" aria-label="Playback controls">
         <span className="control-label" id="playback-label">
-          Reproducción
+          Playback
         </span>
         <div className="button-row" role="group" aria-labelledby="playback-label">
           <button type="button" className="btn" onClick={sim.restart}>
-            Reiniciar
+            Restart
           </button>
           <button
             type="button"
@@ -259,7 +323,7 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
             onClick={sim.togglePlay}
             disabled={sim.completed && !sim.playing}
           >
-            {sim.playing ? "Pausar" : "Reproducir"}
+            {sim.playing ? "Pause" : "Play"}
           </button>
           <button
             type="button"
@@ -267,7 +331,7 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
             onClick={sim.stepOneSecond}
             disabled={sim.completed}
           >
-            Avanzar 1 s
+            Step 1 s
           </button>
           {SPEED_OPTIONS.map((option) => (
             <button
@@ -284,20 +348,20 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
       </div>
 
       <div className="control-group status-group">
-        <span className="control-label">Estado</span>
+        <span className="control-label">Status</span>
         <div className="status-row">
           <span className="second-indicator">
-            Segundo <strong>{sim.targetSecond}</strong> / {sim.totalSeconds}
+            Second <strong>{sim.targetSecond}</strong> / {sim.totalSeconds}
           </span>
           {modeBadge}
         </div>
         {sim.provider === "jev" ? (
           <p className="note">
-            El intervalo de llamada a Jev es de demostración; no es cadencia de
-            producción.
+            The Jev call interval is for demonstration only; it is not
+            production cadence.
           </p>
         ) : null}
-        {sim.completed ? <p className="note">Simulación completada.</p> : null}
+        {sim.completed ? <p className="note">Simulation complete.</p> : null}
       </div>
     </section>
   );

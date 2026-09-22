@@ -38,7 +38,7 @@ import {
   formatSecondTick,
 } from "./labels";
 
-const AXIS_TICK = { fontSize: 10, fill: "#555" } as const;
+const AXIS_TICK = { fontSize: 10, fill: "#43423f" } as const;
 
 interface SeriesPoint {
   second: number;
@@ -74,7 +74,7 @@ function onClickToSecond(handler: (second: number) => void) {
   };
 }
 
-const cursorProps = { stroke: "#1a1a1a", strokeWidth: 1, strokeDasharray: "4 3" };
+const cursorProps = { stroke: "#000000", strokeWidth: 1, strokeDasharray: "4 3" };
 
 function ChartFrame({
   title,
@@ -93,7 +93,7 @@ function ChartFrame({
       <div
         className="chart-box"
         role="img"
-        aria-label={`${title}. Cursor en el segundo ${selectedSecond}.`}
+        aria-label={`${title}. Cursor at second ${selectedSecond}.`}
         onClick={onClickToSecond(onSelect)}
       >
         {children}
@@ -212,65 +212,65 @@ export function SynchronizedCharts({
   const hasHrReference = baseline.typicalEasyHrBpm !== undefined;
 
   return (
-    <section className="charts" aria-label="Gráficas sincronizadas">
+    <section className="charts" aria-label="Synchronized charts">
       <p className="note">
-        Segundo seleccionado: <strong>{selectedSecond}</strong>. Haz clic en cualquier gráfica
-        para mover el cursor y sincronizar tabla y auditoría.
+        Selected second: <strong>{selectedSecond}</strong>. Click any chart to
+        move the cursor and sync the table and audit panel.
       </p>
 
-      <ChartFrame title="1 · Ritmo vs rango objetivo" onSelect={onSelect} selectedSecond={selectedSecond}>
+      <ChartFrame title="1 · Pace vs target range" onSelect={onSelect} selectedSecond={selectedSecond}>
         <ResponsiveContainer width="100%" height={150}>
           <ComposedChart data={series} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
-            <CartesianGrid stroke="#eee" />
+            <CartesianGrid stroke="#f2f2f0" />
             <XAxis dataKey="second" type="number" domain={xDomain} tick={AXIS_TICK} tickFormatter={formatSecondTick} />
             <YAxis domain={paceYDomain} tick={AXIS_TICK} width={38} tickFormatter={(v: number) => formatSecondTick(v).replace(" ", "")} />
-            <Tooltip labelFormatter={(label) => `Segundo ${String(label)}`} formatter={(value) => formatPace(Number(value))} />
+            <Tooltip labelFormatter={(label) => `Second ${String(label)}`} formatter={(value) => formatPace(Number(value))} />
             {targetPaceSecPerKm !== null ? (
               <ReferenceArea
                 y1={targetPaceSecPerKm.min}
                 y2={targetPaceSecPerKm.max}
-                fill="#dfe7df"
+                fill="#fc5200"
                 fillOpacity={0.6}
               />
             ) : null}
             <ReferenceLine x={selectedSecond} {...cursorProps} />
-            <Line type="monotone" dataKey="pace" stroke="#2b4a6f" dot={false} isAnimationActive={false} />
+            <Line type="monotone" dataKey="pace" stroke="#fc5200" dot={false} isAnimationActive={false} />
           </ComposedChart>
         </ResponsiveContainer>
       </ChartFrame>
 
-      <ChartFrame title="2 · Frecuencia cardíaca" onSelect={onSelect} selectedSecond={selectedSecond}>
+      <ChartFrame title="2 · Heart rate" onSelect={onSelect} selectedSecond={selectedSecond}>
         <ResponsiveContainer width="100%" height={150}>
           <ComposedChart data={series} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
-            <CartesianGrid stroke="#eee" />
+            <CartesianGrid stroke="#f2f2f0" />
             <XAxis dataKey="second" type="number" domain={xDomain} tick={AXIS_TICK} tickFormatter={formatSecondTick} />
             <YAxis domain={["auto", "auto"]} tick={AXIS_TICK} width={38} />
-            <Tooltip labelFormatter={(label) => `Segundo ${String(label)}`} formatter={(value) => `${Math.round(Number(value))} ppm`} />
+            <Tooltip labelFormatter={(label) => `Second ${String(label)}`} formatter={(value) => `${Math.round(Number(value))} bpm`} />
             {hasHrReference ? (
               <ReferenceLine
                 y={baseline.typicalEasyHrBpm}
-                stroke="#8d6e63"
+                stroke="#0060d0"
                 strokeDasharray="5 4"
-                label={{ value: "ref. histórica", fontSize: 10, position: "insideTopLeft" }}
+                label={{ value: "historical ref.", fontSize: 10, position: "insideTopLeft" }}
               />
             ) : null}
             <ReferenceLine x={selectedSecond} {...cursorProps} />
-            <Line type="monotone" dataKey="hr" stroke="#a13d3d" dot={false} connectNulls isAnimationActive={false} />
+            <Line type="monotone" dataKey="hr" stroke="#fc5200" dot={false} connectNulls isAnimationActive={false} />
           </ComposedChart>
         </ResponsiveContainer>
       </ChartFrame>
 
-      <ChartFrame title="3 · Elevación y pendiente" onSelect={onSelect} selectedSecond={selectedSecond}>
+      <ChartFrame title="3 · Elevation and grade" onSelect={onSelect} selectedSecond={selectedSecond}>
         <ResponsiveContainer width="100%" height={150}>
           <ComposedChart data={series} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
-            <CartesianGrid stroke="#eee" />
+            <CartesianGrid stroke="#f2f2f0" />
             <XAxis dataKey="second" type="number" domain={xDomain} tick={AXIS_TICK} tickFormatter={formatSecondTick} />
             <YAxis yAxisId="elev" tick={AXIS_TICK} width={38} />
             <YAxis yAxisId="grade" orientation="right" tick={AXIS_TICK} width={38} />
-            <Tooltip labelFormatter={(label) => `Segundo ${String(label)}`} />
+            <Tooltip labelFormatter={(label) => `Second ${String(label)}`} />
             <ReferenceLine x={selectedSecond} {...cursorProps} />
-            <Area yAxisId="elev" type="monotone" dataKey="elevation" stroke="#5c7a5c" fill="#cfe0cf" fillOpacity={0.5} isAnimationActive={false} />
-            <Line yAxisId="grade" type="monotone" dataKey="grade" stroke="#7a6a3d" dot={false} isAnimationActive={false} />
+            <Area yAxisId="elev" type="monotone" dataKey="elevation" stroke="#0060d0" fill="#0060d0" fillOpacity={0.16} isAnimationActive={false} />
+            <Line yAxisId="grade" type="monotone" dataKey="grade" stroke="#fc5200" dot={false} isAnimationActive={false} />
           </ComposedChart>
         </ResponsiveContainer>
       </ChartFrame>
@@ -279,35 +279,35 @@ export function SynchronizedCharts({
         <ResponsiveContainer width="100%" height={hasRpe ? 120 : 60}>
           {hasRpe ? (
             <ComposedChart data={series} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
-              <CartesianGrid stroke="#eee" />
+              <CartesianGrid stroke="#f2f2f0" />
               <XAxis dataKey="second" type="number" domain={xDomain} tick={AXIS_TICK} tickFormatter={formatSecondTick} />
               <YAxis domain={[0, 10]} tick={AXIS_TICK} width={38} />
-              <Tooltip labelFormatter={(label) => `Segundo ${String(label)}`} />
+              <Tooltip labelFormatter={(label) => `Second ${String(label)}`} />
               <ReferenceLine x={selectedSecond} {...cursorProps} />
-              <Line type="stepAfter" dataKey="rpe" stroke="#5b4a7a" dot={{ r: 2 }} connectNulls isAnimationActive={false} />
+              <Line type="stepAfter" dataKey="rpe" stroke="#0060d0" dot={{ r: 2 }} connectNulls isAnimationActive={false} />
             </ComposedChart>
           ) : (
-            <p className="note">Este escenario no genera valores de RPE.</p>
+            <p className="note">This scenario does not generate RPE values.</p>
           )}
         </ResponsiveContainer>
       </ChartFrame>
 
-      <ChartFrame title="5 · Decisiones por segundo" onSelect={onSelect} selectedSecond={selectedSecond}>
+      <ChartFrame title="5 · Decisions per second" onSelect={onSelect} selectedSecond={selectedSecond}>
         <ResponsiveContainer width="100%" height={170}>
           <ComposedChart data={decisionSeries} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
-            <CartesianGrid stroke="#eee" />
+            <CartesianGrid stroke="#f2f2f0" />
             <XAxis dataKey="second" type="number" domain={xDomain} tick={AXIS_TICK} tickFormatter={formatSecondTick} />
             <YAxis
               domain={[-1, 4]}
               ticks={[-1, 0, 1, 2, 3, 4]}
               tickFormatter={(value: number) => {
                 const map: Record<number, string> = {
-                  [-1]: "Detener",
-                  0: "Insuf.",
-                  1: "Recuperar",
-                  2: "Bajar",
-                  3: "Mantener",
-                  4: "Subir",
+                  [-1]: "Stop",
+                  0: "Low",
+                  1: "Recover",
+                  2: "Down",
+                  3: "Hold",
+                  4: "Up",
                 };
                 return map[value] ?? "";
               }}
@@ -315,14 +315,14 @@ export function SynchronizedCharts({
               width={68}
             />
             <Tooltip
-              labelFormatter={(label) => `Segundo ${String(label)}`}
+              labelFormatter={(label) => `Second ${String(label)}`}
               formatter={(_value, _name, item) => {
                 const action = (item?.payload as { action?: DecisionAction } | undefined)?.action;
-                return [action !== undefined ? `${ACTION_LABELS[action]}` : "—", "Decisión"];
+                return [action !== undefined ? `${ACTION_LABELS[action]}` : "—", "Decision"];
               }}
             />
             <ReferenceLine x={selectedSecond} {...cursorProps} />
-            <Line type="stepAfter" dataKey="level" stroke="#b9b9b9" dot={false} isAnimationActive={false} />
+            <Line type="stepAfter" dataKey="level" stroke="#43423f" dot={false} isAnimationActive={false} />
             <Scatter dataKey="level" shape={decisionDot} isAnimationActive={false} />
           </ComposedChart>
         </ResponsiveContainer>
@@ -336,22 +336,22 @@ export function SynchronizedCharts({
         </div>
       </ChartFrame>
 
-      <ChartFrame title="6 · Ritmo por segmento (60 s) vs mediana histórica" onSelect={onSelect} selectedSecond={selectedSecond}>
+      <ChartFrame title="6 · Pace per segment (60 s) vs historical median" onSelect={onSelect} selectedSecond={selectedSecond}>
         <ResponsiveContainer width="100%" height={historyEstablished ? 150 : 60}>
           {historyEstablished ? (
             <ComposedChart data={segmentSeries} margin={{ top: 5, right: 10, bottom: 0, left: 0 }}>
-              <CartesianGrid stroke="#eee" />
+              <CartesianGrid stroke="#f2f2f0" />
               <XAxis dataKey="second" type="number" domain={xDomain} tick={AXIS_TICK} tickFormatter={formatSecondTick} />
               <YAxis domain={["auto", "auto"]} tick={AXIS_TICK} width={38} tickFormatter={(v: number) => formatSecondTick(v).replace(" ", "")} />
-              <Tooltip labelFormatter={(label) => `Segmento desde el segundo ${String(label)}`} formatter={(value) => formatPace(Number(value))} />
+              <Tooltip labelFormatter={(label) => `Segment from second ${String(label)}`} formatter={(value) => formatPace(Number(value))} />
               <ReferenceLine x={selectedSecond} {...cursorProps} />
-              <Line type="monotone" dataKey="pace" stroke="#2b4a6f" dot={{ r: 3 }} isAnimationActive={false} />
-              <Line type="monotone" dataKey="medianPace" stroke="#8d6e63" strokeDasharray="5 4" dot={false} isAnimationActive={false} />
+              <Line type="monotone" dataKey="pace" stroke="#fc5200" dot={{ r: 3 }} isAnimationActive={false} />
+              <Line type="monotone" dataKey="medianPace" stroke="#0060d0" strokeDasharray="5 4" dot={false} isAnimationActive={false} />
             </ComposedChart>
           ) : (
             <p className="note">
-              La comparación con la mediana histórica se muestra solo con madurez
-              establecida (4–10 sesiones comparables).
+              The historical median comparison is shown only with established
+              maturity (4–10 comparable sessions).
             </p>
           )}
         </ResponsiveContainer>

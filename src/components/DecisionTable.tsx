@@ -44,8 +44,8 @@ export function DecisionTable({
 
   if (entries.length === 0) {
     return (
-      <section className="table-section" aria-label="Historial de decisiones">
-        <p className="note">Aún no hay decisiones; inicia la simulación.</p>
+      <section className="table-section" aria-label="Decision history">
+        <p className="note">No decisions yet; start the simulation.</p>
       </section>
     );
   }
@@ -55,9 +55,9 @@ export function DecisionTable({
   const visible = entries.slice(start, end);
 
   return (
-    <section className="table-section" aria-label="Historial de decisiones">
+    <section className="table-section" aria-label="Decision history">
       <div className="table-header-row">
-        <h2 className="section-title">Historial de decisiones</h2>
+        <h2 className="section-title">Decision history</h2>
         <div className="pager">
           <button
             type="button"
@@ -65,7 +65,7 @@ export function DecisionTable({
             onClick={() => setWindowEnd((current) => Math.max(WINDOW_SIZE, current - WINDOW_SIZE))}
             disabled={start === 0}
           >
-            ← Anteriores
+            ← Previous
           </button>
           <span className="pager-label">
             {start + 1}–{end} de {entries.length}
@@ -76,7 +76,7 @@ export function DecisionTable({
             onClick={() => setWindowEnd((current) => Math.min(entries.length, current + WINDOW_SIZE))}
             disabled={end >= entries.length}
           >
-            Siguientes →
+            Next →
           </button>
         </div>
       </div>
@@ -85,15 +85,15 @@ export function DecisionTable({
         <table className="decision-table">
           <thead>
             <tr>
-              <th scope="col">Segundo</th>
-              <th scope="col">Acción</th>
-              <th scope="col">Origen</th>
-              <th scope="col">Confianza</th>
-              <th scope="col">Ritmo</th>
-              <th scope="col">FC</th>
-              <th scope="col">Pendiente</th>
-              <th scope="col">Historial</th>
-              <th scope="col">Razón</th>
+              <th scope="col">Second</th>
+              <th scope="col">Action</th>
+              <th scope="col">Source</th>
+              <th scope="col">Confidence</th>
+              <th scope="col">Pace</th>
+              <th scope="col">HR</th>
+              <th scope="col">Grade</th>
+              <th scope="col">History</th>
+              <th scope="col">Reason</th>
             </tr>
           </thead>
           <tbody>
@@ -127,7 +127,7 @@ export function DecisionTable({
           </tbody>
         </table>
       </div>
-      <p className="note">↻ marca una decisión reutilizada del segundo anterior.</p>
+      <p className="note">↻ marks a decision reused from the previous second.</p>
     </section>
   );
 }

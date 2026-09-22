@@ -14,6 +14,7 @@ import { AuditPanel } from "@/components/AuditPanel";
 import { ControlsBar } from "@/components/ControlsBar";
 import { DecisionTable } from "@/components/DecisionTable";
 import { SummaryCards } from "@/components/SummaryCards";
+import { LiveSimulationPanel } from "@/components/LiveSimulationPanel";
 import { useRaceSimulation } from "@/components/useRaceSimulation";
 import { REAL_MODE_ATTRIBUTION } from "@/components/labels";
 import { SCENARIOS } from "@/simulation/scenarios";
@@ -22,7 +23,7 @@ const SynchronizedCharts = dynamic(
   () => import("@/components/SynchronizedCharts").then((mod) => mod.SynchronizedCharts),
   {
     ssr: false,
-    loading: () => <p className="note">Cargando gráficas…</p>,
+    loading: () => <p className="note">Loading charts…</p>,
   },
 );
 
@@ -42,22 +43,32 @@ export default function HomePage() {
   return (
     <main className="page">
       <header className="page-header">
-        <h1>Demo de carrera con Jev</h1>
+        <h1>Race demo with Jev</h1>
         <p className="disclaimer">
-          Demostración con datos simulados y umbrales de piloto. No es diagnóstico,
-          consejo médico ni prevención de lesiones; la seguridad siempre domina.
+          Demonstration with simulated data and pilot thresholds. Not a diagnosis,
+          medical advice, or injury prevention; safety always dominates.
         </p>
       </header>
 
       <ControlsBar sim={sim} />
+
+      <LiveSimulationPanel
+        entries={sim.entries}
+        samples={sim.samples}
+        targetPaceSecPerKm={
+          sim.session.source.kind === "synthetic-scenario"
+            ? SCENARIOS[sim.scenarioId].targetPaceSecPerKm
+            : null
+        }
+      />
 
       {sim.dataSource === "real" ? (
         <p className="banner banner-info">{REAL_MODE_ATTRIBUTION}</p>
       ) : null}
       {sim.realStatus === "error" ? (
         <p className="banner banner-warning" role="alert">
-          No se pudo cargar la telemetría real. Si falta el CSV fuente, ejecuta{" "}
-          <code>node scripts/download-kona-2022.mjs</code> y reintenta.
+          Could not load real telemetry. If the source CSV is missing, run{" "}
+          <code>node scripts/download-kona-2022.mjs</code> and retry.
         </p>
       ) : null}
       {sim.failureNote !== null ? (
@@ -66,7 +77,7 @@ export default function HomePage() {
         </p>
       ) : null}
       {sim.historyCount === 0 ? (
-        <p className="banner banner-info">Sin referencia personal; confianza limitada.</p>
+        <p className="banner banner-info">No personal reference; limited confidence.</p>
       ) : null}
 
       <SummaryCards entry={selectedEntry} sample={selectedSample} />
@@ -105,8 +116,8 @@ export default function HomePage() {
 
       <footer className="page-footer">
         <p>
-          La clave de API (TYPESAFE_API_KEY) vive solo en el servidor; sin clave la
-          demo funciona en «Modo simulación» con el proveedor determinista mock.
+          The API key (TYPESAFE_API_KEY) lives only on the server; without a key the
+          demo runs in “Simulation mode” with the deterministic mock provider.
         </p>
       </footer>
     </main>
