@@ -48,6 +48,9 @@ export const decideRequestBodySchema = z.object({
   ]),
   previousDecision: decisionTraceSchema.nullable(),
   callJev: z.boolean(),
+  /** Composer bypass toggle: "raw" accepts the provider decision verbatim.
+   *  Optional; absent = "guarded" (all composer veto rules active). */
+  policyMode: z.enum(["guarded", "raw"]).optional(),
   /** Kept optional for backwards-compatible demo callers; UI always sends it. */
   heartRateZones: heartRateZonesSchema.optional().default(DEFAULT_HEART_RATE_ZONES.map((zone) => ({ ...zone }))),
 });
@@ -105,6 +108,7 @@ export function createDecideHandler(deps: DecideHandlerDeps = {}) {
       provider,
       previousDecision: body.previousDecision,
       heartRateZones: body.heartRateZones,
+      policyMode: body.policyMode,
     });
 
     return Response.json({ trace, mode }, { status: 200 });

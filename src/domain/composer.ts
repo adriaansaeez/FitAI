@@ -31,6 +31,7 @@ export const COMPOSER_REASON_CODES = {
   autoPaused: "auto_paused",
   missingRequiredMetrics: "missing_required_metrics",
   noIncreaseInBlock: "no_increase_in_block",
+  composerBypassed: "composer_bypassed",
 } as const;
 
 /** Cooldown after a pace change during which opposite changes are blocked. */
@@ -133,6 +134,8 @@ export function composeDecision(
   previousDecision: DecisionTrace | null,
   block?: TrainingBlock,
   targetPaceSecPerKm?: PaceTargetSecPerKm,
+  /** "raw" bypasses every composer veto/correction rule; defaults to "guarded". */
+  policyMode: "guarded" | "raw" = "guarded",
 ): DecisionTrace {
   const reasonCodes: string[] = safety.reasonCodes.map(mapSafetyReason);
 
@@ -199,6 +202,26 @@ export function composeDecision(
   let proposedAction = providerResult.action;
   let composerSource: "mock" | "jev" | "composer" =
     providerResult.source ?? "composer";
+
+  // Raw mode: the provider decision is accepted verbatim. The hard stop and
+  // the missingRequiredMetric / degraded-safety short-circuits above still
+  // apply; every veto/correction rule below (cooldown, low confidence, low
+  // interpretability, increase validity, zone ceiling, disproportionate risk,
+  // adjustment limits) is skipped, and the bypass is recorded for audit.
+  if (policyMode === "raw") {
+    reasonCodes.push(COMPOSER_REASON_CODES.composerBypassed);
+    return {
+      second: sample.second,
+      action: proposedAction,
+      source: composerSource,
+      confidence: providerResult.actionConfidence,
+      reasonCodes,
+      explanationKey: decisionMessageKey(proposedAction, primaryReason(reasonCodes)),
+      derivedMetrics: metrics,
+      safety,
+      probabilities: probabilitiesToStringKeys(providerResult.interpretability?.probabilities),
+    };
+  }
 
   // 5. Cooldown: block immediate opposite change after a pace change.
   const cooldownBlock = cooldownOppositeChangeBlock(previousDecision, proposedAction, sample.second);
@@ -384,6 +407,9 @@ export type DecideSecondInput = {
   heartRateZones?: readonly HeartRateZone[];
   provider?: DecisionProvider;
   previousDecision?: DecisionTrace | null;
+  /** Defaults to "guarded"; "raw" accepts the provider decision verbatim
+   *  (symptom hard-stop and data-quality short-circuits still apply). */
+  policyMode?: "guarded" | "raw";
 };
 
 /**
@@ -393,6 +419,7 @@ export type DecideSecondInput = {
  */
 export async function decideSecond(input: DecideSecondInput): Promise<DecisionTrace> {
   const { samples, block, previousDecision } = input;
+  const policyMode = input.policyMode ?? "guarded";
   const currentSample = samples[samples.length - 1];
   if (currentSample === undefined) {
     throw new Error("decideSecond requires at least one sample");
@@ -436,5 +463,6 @@ export async function decideSecond(input: DecideSecondInput): Promise<DecisionTr
     previousDecision ?? null,
     block,
     input.targetPaceSecPerKm,
+    policyMode,
   );
 }
