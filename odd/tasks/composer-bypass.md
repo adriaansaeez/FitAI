@@ -38,10 +38,16 @@ even in bypass mode.
       observed, GREEN 280/280, tsc clean. Recover hold NOT skipped in raw mode
       (re-evaluation pacing rule, not a provider veto) — owner may move the
       raw branch above step 3 if wanted.
-- [ ] T2 — UI: ControlsBar toggle + useRaceSimulation wiring; decision-pipeline
-      test showing raw mode accepts a proposal the guarded mode would veto.
-- [ ] T3 — Gates + smoke.
+- [x] T2 — UI: ControlsBar "Safety policy" checkbox (default on, guarded/
+      raw state text) + useRaceSimulation policyOn state, configRef wiring,
+      fetch body policyMode, hook exposure. Pipeline tests: guarded-vs-raw
+      pairs over low-confidence and increase-without-target veto paths,
+      hard-stop stays stop_and_escalate/source safety in BOTH modes, schema
+      accepts policyMode. 284/284, tsc clean.
+- [x] T3 — Gates + smoke: vitest 284/284, tsc clean, dev-server render
+      smoke shows the "Safety policy" toggle and lang="en".
 
 ## Evidence
 
-(recorded per task at close)
+- T1: commit fcbc308 (feat(composer): add raw policy mode bypassing veto rules)
+- T2+T3: recorded at commit time of the UI work unit

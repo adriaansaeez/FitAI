@@ -205,6 +205,24 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
         </select>
       </div>
 
+      <div className="control-group">
+        <label htmlFor="policy-toggle">Safety policy</label>
+        <span>
+          <input
+            id="policy-toggle"
+            type="checkbox"
+            checked={sim.policyOn}
+            onChange={(event) => sim.setPolicyOn(event.target.checked)}
+          />{" "}
+          {sim.policyOn ? "On (guarded)" : "Off (raw)"}
+        </span>
+        <p className="note">
+          {sim.policyOn
+            ? "The composer may veto or correct the provider decision."
+            : "Raw mode: the provider decision is accepted as-is. The symptom hard-stop stays active."}
+        </p>
+      </div>
+
       <fieldset className="control-group zone-editor" aria-describedby="heart-rate-zones-note">
         <legend>HR zones (bpm)</legend>
         <div className="zone-fields">

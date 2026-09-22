@@ -77,6 +77,9 @@ interface DecideBody {
   previousDecision: DecisionTrace | null;
   callJev: boolean;
   heartRateZones: HeartRateZone[];
+  /** Composer bypass toggle: "raw" accepts the provider decision verbatim;
+   *  "guarded" (default, safety policy ON) keeps every veto rule active. */
+  policyMode: "guarded" | "raw";
 }
 
 /** Where the simulated samples come from. */
@@ -208,6 +211,11 @@ export interface RaceSimulation {
   setProvider: (provider: ProviderChoice) => void;
   jevInterval: JevInterval;
   setJevInterval: (interval: JevInterval) => void;
+  /** Safety policy ON (guarded: composer veto rules active) or OFF
+   *  (raw: the provider decision is accepted verbatim). Toggling takes
+   *  effect from the next decision tick without restarting the run. */
+  policyOn: boolean;
+  setPolicyOn: (on: boolean) => void;
   speed: Speed;
   setSpeed: (speed: Speed) => void;
   heartRateZones: HeartRateZone[];
@@ -264,6 +272,7 @@ export function useRaceSimulation(): RaceSimulation {
   const [historyCount, setHistoryCountState] = useState<HistoryCount>(10);
   const [provider, setProviderState] = useState<ProviderChoice>("mock");
   const [jevInterval, setJevIntervalState] = useState<JevInterval>(5);
+  const [policyOn, setPolicyOnState] = useState<boolean>(true);
   const [speed, setSpeedState] = useState<Speed>(1);
   const [heartRateZones, setHeartRateZonesState] = useState<HeartRateZone[]>(
     () => DEFAULT_HEART_RATE_ZONES.map((zone) => ({ ...zone })),
@@ -357,6 +366,7 @@ export function useRaceSimulation(): RaceSimulation {
     historyCount: effectiveHistoryCount,
     provider,
     jevInterval,
+    policyOn,
     block,
     paceTarget,
     baseline,
@@ -370,6 +380,7 @@ export function useRaceSimulation(): RaceSimulation {
     historyCount: effectiveHistoryCount,
     provider,
     jevInterval,
+    policyOn,
     block,
     paceTarget,
     baseline,
@@ -498,6 +509,7 @@ export function useRaceSimulation(): RaceSimulation {
         previousDecision: prev?.trace ?? null,
         callJev,
         heartRateZones: cfg.heartRateZones,
+        policyMode: cfg.policyOn ? "guarded" : "raw",
       });
       if (runId !== runIdRef.current) {
         // Run was reset while the request was in flight.
@@ -636,6 +648,10 @@ export function useRaceSimulation(): RaceSimulation {
     setJevIntervalState(interval);
   }, []);
 
+  const setPolicyOn = useCallback((on: boolean) => {
+    setPolicyOnState(on);
+  }, []);
+
   const setSpeed = useCallback((value: Speed) => {
     setSpeedState(value);
   }, []);
@@ -691,6 +707,8 @@ export function useRaceSimulation(): RaceSimulation {
     setProvider,
     jevInterval,
     setJevInterval,
+    policyOn,
+    setPolicyOn,
     speed,
     setSpeed,
     heartRateZones,

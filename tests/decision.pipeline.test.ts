@@ -16,6 +16,7 @@ import {
 } from "../src/services/mockDecisionProvider";
 import type { DecisionProvider, DecideInput, ProviderResult } from "../src/services/provider";
 import { SCENARIOS, generateScenarioSamples } from "../src/simulation/scenarios";
+import type { RunningSample } from "../src/domain/types";
 import {
   computeBaseline,
   generateAthleteHistory,
@@ -403,5 +404,123 @@ describe("fail-closed increase guard (Kona 2022): no increase without target/his
       callJev: false,
     });
     expect(parsed.success).toBe(true);
+  });
+});
+
+describe("composer bypass (policyMode raw): provider decision accepted verbatim", () => {
+  const samples = generateScenarioSamples("easy-under-target", SEED);
+  const target = SCENARIOS["easy-under-target"].targetPaceSecPerKm;
+
+  /** Provider proposing an increase below the composer's confidence floor. */
+  function lowConfidenceIncreaseProvider(): DecisionProvider {
+    return {
+      async decide(): Promise<ProviderResult> {
+        return {
+          action: "increase_gently",
+          actionConfidence: 0.5,
+          disproportionateEffortProbability: 0.05,
+          contextExplanation: "normal_variation",
+          interpretability: { score: 2, confidence: 0.9, probabilities: {} },
+          source: "mock",
+        };
+      },
+    };
+  }
+
+  it("guarded vetoes a low-confidence increase; raw accepts it with composer_bypassed", async () => {
+    // Target + comparable history: the only blocker left is the confidence
+    // floor, so this isolates the composer veto (not the fail-closed guard).
+    const guarded = await decideSecond({
+      samples: samples.slice(0, 120),
+      block: "easy",
+      targetPaceSecPerKm: target,
+      comparableHistoryCount: 1,
+      provider: lowConfidenceIncreaseProvider(),
+      policyMode: "guarded",
+    });
+    expect(guarded.action).toBe("maintain");
+    expect(guarded.source).toBe("composer");
+    expect(guarded.reasonCodes).toContain("low_choice_confidence");
+
+    const raw = await decideSecond({
+      samples: samples.slice(0, 120),
+      block: "easy",
+      targetPaceSecPerKm: target,
+      comparableHistoryCount: 1,
+      provider: lowConfidenceIncreaseProvider(),
+      policyMode: "raw",
+    });
+    expect(raw.action).toBe("increase_gently");
+    expect(raw.source).toBe("mock");
+    expect(raw.reasonCodes).toContain("composer_bypassed");
+  });
+
+  it("guarded vetoes an increase without target/history; raw accepts it with composer_bypassed", async () => {
+    const guarded = await decideSecond({
+      samples: samples.slice(0, 120),
+      block: "easy",
+      provider: increaseProvider(),
+      policyMode: "guarded",
+    });
+    expect(guarded.action).toBe("maintain");
+    expect(guarded.source).toBe("composer");
+    expect(guarded.reasonCodes).toContain("increase_without_target");
+
+    const raw = await decideSecond({
+      samples: samples.slice(0, 120),
+      block: "easy",
+      provider: increaseProvider(),
+      policyMode: "raw",
+    });
+    expect(raw.action).toBe("increase_gently");
+    expect(raw.source).toBe("mock");
+    expect(raw.reasonCodes).toContain("composer_bypassed");
+  });
+
+  it("the symptom hard-stop stays stop_and_escalate / safety in BOTH modes", async () => {
+    const last = samples[samples.length - 1];
+    if (last === undefined) throw new Error("scenario produced no samples");
+    const symptomatic: RunningSample[] = [
+      ...samples.slice(0, 119),
+      { ...last, symptomsReported: true },
+    ];
+
+    const guarded = await decideSecond({
+      samples: symptomatic,
+      block: "easy",
+      targetPaceSecPerKm: target,
+      comparableHistoryCount: 1,
+      provider: increaseProvider(),
+      policyMode: "guarded",
+    });
+    expect(guarded.action).toBe("stop_and_escalate");
+    expect(guarded.source).toBe("safety");
+    expect(guarded.reasonCodes).toContain("symptoms_reported");
+
+    const raw = await decideSecond({
+      samples: symptomatic,
+      block: "easy",
+      targetPaceSecPerKm: target,
+      comparableHistoryCount: 1,
+      provider: increaseProvider(),
+      policyMode: "raw",
+    });
+    expect(raw.action).toBe("stop_and_escalate");
+    expect(raw.source).toBe("safety");
+    expect(raw.reasonCodes).toContain("symptoms_reported");
+  });
+
+  it("the decide request schema accepts an optional policyMode", () => {
+    const parsed = decideRequestBodySchema.safeParse({
+      sample: samples[samples.length - 1],
+      block: "easy",
+      recentSamples: [],
+      historyCount: 5,
+      previousDecision: null,
+      callJev: false,
+      policyMode: "raw",
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.policyMode).toBe("raw");
   });
 });
