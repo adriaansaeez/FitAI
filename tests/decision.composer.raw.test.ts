@@ -258,6 +258,54 @@ describe("raw mode: composer veto rules are skipped", () => {
   });
 });
 
+describe("raw mode: the recover hold is bypassed", () => {
+  it("a provider proposal inside the recover re-evaluation window is accepted verbatim in raw mode", () => {
+    const previous = trace({
+      second: 100,
+      action: "recover",
+      source: "composer",
+      confidence: 0.8,
+      reasonCodes: [COMPOSER_REASON_CODES.recoverReevaluationPending],
+      explanationKey: "decision.recover.recover_reevaluation_pending",
+    });
+    const raw = compose({
+      sample: { second: 100 + 90 - 1 },
+      providerResult: providerResult({ action: "increase_gently", source: "jev" }),
+      previous,
+      policyMode: "raw",
+    });
+    expect(raw.action).toBe("increase_gently");
+    expect(raw.source).toBe("jev");
+    expect(raw.reasonCodes).toContain(COMPOSER_REASON_CODES.composerBypassed);
+    expect(raw.reasonCodes).not.toContain(
+      COMPOSER_REASON_CODES.recoverReevaluationPending,
+    );
+  });
+
+  it("the same inputs in guarded mode still return the recover hold", () => {
+    const previous = trace({
+      second: 100,
+      action: "recover",
+      source: "composer",
+      confidence: 0.8,
+      reasonCodes: [COMPOSER_REASON_CODES.recoverReevaluationPending],
+      explanationKey: "decision.recover.recover_reevaluation_pending",
+    });
+    const guarded = compose({
+      sample: { second: 100 + 90 - 1 },
+      providerResult: providerResult({ action: "increase_gently", source: "jev" }),
+      previous,
+      policyMode: "guarded",
+    });
+    expect(guarded.action).toBe("recover");
+    expect(guarded.source).toBe("composer");
+    expect(guarded.reasonCodes).toContain(
+      COMPOSER_REASON_CODES.recoverReevaluationPending,
+    );
+    expect(guarded.reasonCodes).not.toContain(COMPOSER_REASON_CODES.composerBypassed);
+  });
+});
+
 describe("raw mode: safety short-circuits remain active", () => {
   it("the symptom hard-stop still wins in raw mode and carries no bypass code", () => {
     const raw = compose({

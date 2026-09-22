@@ -167,8 +167,40 @@ export function composeDecision(
     };
   }
 
-  // 3. Recover hold: a previous recover stands until re-evaluation time.
+  // Raw mode: the provider decision is accepted verbatim. The hard stop and
+  // the missingRequiredMetric / degraded-safety short-circuits above still
+  // apply, and the recover hold below is bypassed (it is a composer rule,
+  // not a safety rule). Every other veto/correction rule (cooldown, low
+  // confidence, low interpretability, increase validity, zone ceiling,
+  // disproportionate risk, adjustment limits) is also skipped, and the
+  // bypass is recorded for audit.
+  if (policyMode === "raw") {
+    // Without a provider result there is nothing to accept verbatim: skip the
+    // recover hold below and fall through to the provider-unavailable handling.
+    if (providerResult !== null) {
+      reasonCodes.push(COMPOSER_REASON_CODES.composerBypassed);
+      return {
+        second: sample.second,
+        action: providerResult.action,
+        source: providerResult.source ?? "composer",
+        confidence: providerResult.actionConfidence,
+        reasonCodes,
+        explanationKey: decisionMessageKey(
+          providerResult.action,
+          primaryReason(reasonCodes),
+        ),
+        derivedMetrics: metrics,
+        safety,
+        probabilities: probabilitiesToStringKeys(providerResult.interpretability?.probabilities),
+      };
+    }
+  }
+
+  // 3. Recover hold: a previous recover stands until re-evaluation time
+  // (raw mode never reaches this rule: it returned above or has no provider
+  // result and falls through to the provider-unavailable handling).
   if (
+    policyMode !== "raw" &&
     previousDecision !== null &&
     previousDecision.action === "recover" &&
     sample.second - previousDecision.second < RECOVER_REEVALUATION_SECONDS
@@ -202,26 +234,6 @@ export function composeDecision(
   let proposedAction = providerResult.action;
   let composerSource: "mock" | "jev" | "composer" =
     providerResult.source ?? "composer";
-
-  // Raw mode: the provider decision is accepted verbatim. The hard stop and
-  // the missingRequiredMetric / degraded-safety short-circuits above still
-  // apply; every veto/correction rule below (cooldown, low confidence, low
-  // interpretability, increase validity, zone ceiling, disproportionate risk,
-  // adjustment limits) is skipped, and the bypass is recorded for audit.
-  if (policyMode === "raw") {
-    reasonCodes.push(COMPOSER_REASON_CODES.composerBypassed);
-    return {
-      second: sample.second,
-      action: proposedAction,
-      source: composerSource,
-      confidence: providerResult.actionConfidence,
-      reasonCodes,
-      explanationKey: decisionMessageKey(proposedAction, primaryReason(reasonCodes)),
-      derivedMetrics: metrics,
-      safety,
-      probabilities: probabilitiesToStringKeys(providerResult.interpretability?.probabilities),
-    };
-  }
 
   // 5. Cooldown: block immediate opposite change after a pace change.
   const cooldownBlock = cooldownOppositeChangeBlock(previousDecision, proposedAction, sample.second);

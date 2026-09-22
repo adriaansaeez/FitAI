@@ -50,4 +50,8 @@ even in bypass mode.
 ## Evidence
 
 - T1: commit fcbc308 (feat(composer): add raw policy mode bypassing veto rules)
-- T2+T3: recorded at commit time of the UI work unit
+- T2+T3: commit c5c09a9 (feat(ui): add safety policy toggle wiring raw composer mode)
+- Follow-up fix (user bug report: composer still appeared with policy off):
+  raw verbatim-accept moved before the 90 s recover hold (composer.ts),
+  paired guarded-vs-raw tests added (2). Suite 286/286, tsc clean. Recorded
+  at fix commit time.
