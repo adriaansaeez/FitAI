@@ -58,6 +58,13 @@ export type DerivedMetrics = {
   historicalPaceDeltaSeconds: number | null;
   historicalHrDeltaBpm: number | null;
   historyMaturity: "none" | "early" | "established";
+  /** 0 = below Z1; 6 = above Z5; null when heart rate is absent. */
+  heartRateZonePosition?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | null;
+  targetHeartRateZoneMin?: 1 | 2 | 3 | 4 | 5 | null;
+  targetHeartRateZoneMax?: 1 | 2 | 3 | 4 | 5 | null;
+  /** Positive means the smoothed HR is above the block's target ceiling. */
+  heartRateZoneDelta?: number | null;
+  consecutiveSecondsAboveHeartRateZone?: number;
 };
 
 export type SafetyResult = {

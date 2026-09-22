@@ -1,4 +1,5 @@
 import type { TrainingBlock } from "../domain/types";
+import { HEART_RATE_ZONE_EXCESS_SECONDS } from "../domain/heartRateZones";
 import type {
   DecisionProvider,
   DecideInput,
@@ -114,6 +115,26 @@ function pickAction(context: Record<string, unknown>): ProviderAction {
   const second = readNumber(context, "second") ?? 0;
   const mayIncreaseIntensity = readBoolean(context, "mayIncreaseIntensity");
   const historyMaturity = readString(context, "historyMaturity") ?? "none";
+  const heartRateZoneDelta = readNumber(context, "heartRateZoneDelta");
+  const heartRateZonePosition = readNumber(context, "heartRateZonePosition");
+  const consecutiveSecondsAboveHeartRateZone = readNumber(
+    context,
+    "consecutiveSecondsAboveHeartRateZone",
+  );
+
+  const sustainedAboveZone =
+    consecutiveSecondsAboveHeartRateZone !== null &&
+    consecutiveSecondsAboveHeartRateZone >= HEART_RATE_ZONE_EXCESS_SECONDS;
+
+  if (
+    sustainedAboveZone &&
+    (heartRateZonePosition === 6 || (heartRateZoneDelta !== null && heartRateZoneDelta >= 2))
+  ) {
+    return "recover";
+  }
+  if (sustainedAboveZone && heartRateZoneDelta !== null && heartRateZoneDelta >= 1) {
+    return "decrease_gently";
+  }
 
   // Strong fatigue signals first.
   if (rpe !== null && rpe >= MOCK_THRESHOLDS.rpeRecover) {

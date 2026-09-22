@@ -22,7 +22,9 @@ import {
   runningSampleSchema,
   trainingBlockSchema,
   decisionTraceSchema,
+  heartRateZonesSchema,
 } from "../../../domain/validation";
+import { DEFAULT_HEART_RATE_ZONES } from "../../../domain/heartRateZones";
 import type { DecisionProvider } from "../../../services/provider";
 import { getDecisionProvider, getProviderMode } from "../../../services/providerSelection";
 
@@ -46,6 +48,8 @@ export const decideRequestBodySchema = z.object({
   ]),
   previousDecision: decisionTraceSchema.nullable(),
   callJev: z.boolean(),
+  /** Kept optional for backwards-compatible demo callers; UI always sends it. */
+  heartRateZones: heartRateZonesSchema.optional().default(DEFAULT_HEART_RATE_ZONES.map((zone) => ({ ...zone }))),
 });
 
 export type DecideRequestBody = z.infer<typeof decideRequestBodySchema>;
@@ -100,6 +104,7 @@ export function createDecideHandler(deps: DecideHandlerDeps = {}) {
       comparableHistoryCount: body.historyCount,
       provider,
       previousDecision: body.previousDecision,
+      heartRateZones: body.heartRateZones,
     });
 
     return Response.json({ trace, mode }, { status: 200 });

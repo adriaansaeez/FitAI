@@ -10,7 +10,13 @@ import type {
   DerivedMetrics,
   PaceTargetSecPerKm,
   RunningSample,
+  TrainingBlock,
 } from "./types";
+import {
+  heartRateZonePosition,
+  targetHeartRateZone,
+  type HeartRateZone,
+} from "./heartRateZones";
 
 /** Pace smoothing window: inside the spec's 30-60 s range. */
 export const PACE_WINDOW_SECONDS = 45;
@@ -133,6 +139,8 @@ export interface ComputeDerivedMetricsInput {
   targetPaceSecPerKm?: PaceTargetSecPerKm;
   baseline?: AthleteBaseline;
   comparableHistoryCount?: number;
+  block?: TrainingBlock;
+  heartRateZones?: readonly HeartRateZone[];
 }
 
 /**
@@ -142,7 +150,7 @@ export interface ComputeDerivedMetricsInput {
 export function computeDerivedMetrics(
   input: ComputeDerivedMetricsInput,
 ): DerivedMetrics {
-  const { samples, second, targetPaceSecPerKm, baseline, comparableHistoryCount } =
+  const { samples, second, targetPaceSecPerKm, baseline, comparableHistoryCount, block, heartRateZones } =
     input;
   const upToNow = samples.filter((sample) => sample.second <= second);
   const paceSeries = upToNow.map((sample) => sample.paceSecPerKm);
@@ -162,6 +170,18 @@ export function computeDerivedMetrics(
       : null;
 
   const comparableCount = comparableHistoryCount ?? 0;
+  const targetZone = block === undefined || heartRateZones === undefined ? null : targetHeartRateZone(block);
+  const currentZone = heartRateZones === undefined ? null : heartRateZonePosition(heartRateWindowBpm, heartRateZones);
+  const heartRateZoneDelta =
+    currentZone !== null && targetZone !== null ? currentZone - targetZone.maxZone : null;
+  let consecutiveSecondsAboveHeartRateZone = 0;
+  if (targetZone !== null && heartRateZones !== undefined) {
+    for (let index = upToNow.length - 1; index >= 0; index -= 1) {
+      const zone = heartRateZonePosition(upToNow[index]!.heartRateBpm, heartRateZones);
+      if (zone === null || zone <= targetZone.maxZone) break;
+      consecutiveSecondsAboveHeartRateZone += 1;
+    }
+  }
 
   return {
     paceWindowSecPerKm,
@@ -172,6 +192,11 @@ export function computeDerivedMetrics(
     historicalPaceDeltaSeconds,
     historicalHrDeltaBpm,
     historyMaturity: deriveHistoryMaturity(comparableCount),
+    heartRateZonePosition: currentZone,
+    targetHeartRateZoneMin: targetZone?.minZone ?? null,
+    targetHeartRateZoneMax: targetZone?.maxZone ?? null,
+    heartRateZoneDelta,
+    consecutiveSecondsAboveHeartRateZone,
   };
 }
 

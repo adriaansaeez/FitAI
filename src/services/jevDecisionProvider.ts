@@ -52,6 +52,7 @@ export type RunningContext = {
   block: string;
   target?: {
     paceSecPerKm?: { min: number; max: number };
+    hrZone?: { min: number; max: number };
   };
   window: {
     durationSeconds: number;
@@ -59,6 +60,9 @@ export type RunningContext = {
     paceVsTargetSeconds?: number; // positive = slower than target
     heartRateBpm?: number;
     hrTrendBpmPerMin?: number;
+    heartRateZonePosition?: number;
+    heartRateZoneDelta?: number;
+    consecutiveSecondsAboveHeartRateZone?: number;
     gradePct?: number;
     stoppedOrAutoPaused: boolean;
     signalQuality: "high" | "medium" | "low" | "unknown";
@@ -153,6 +157,9 @@ export function buildJevState(context: Record<string, unknown>): RunningContext 
     paceVsTargetSeconds: readNullableNumber(context, "paceVsTargetSeconds"),
     heartRateBpm: readNullableNumber(context, "heartRateBpm"),
     hrTrendBpmPerMin: readNullableNumber(context, "hrTrendBpmPerMin"),
+    heartRateZonePosition: readNullableNumber(context, "heartRateZonePosition"),
+    heartRateZoneDelta: readNullableNumber(context, "heartRateZoneDelta"),
+    consecutiveSecondsAboveHeartRateZone: readNullableNumber(context, "consecutiveSecondsAboveHeartRateZone"),
     gradePct: readNumber(context, "gradePct") ?? 0,
     stoppedOrAutoPaused: readBoolean(context, "autoPaused"),
     signalQuality,
@@ -197,6 +204,11 @@ export function buildJevState(context: Record<string, unknown>): RunningContext 
       },
     };
   }
+  const targetZoneMin = readNumber(context, "targetHeartRateZoneMin");
+  const targetZoneMax = readNumber(context, "targetHeartRateZoneMax");
+  if (targetZoneMin !== undefined && targetZoneMax !== undefined) {
+    target = { ...(target ?? {}), hrZone: { min: targetZoneMin, max: targetZoneMax } };
+  }
 
   return {
     sport: "running",
@@ -208,6 +220,9 @@ export function buildJevState(context: Record<string, unknown>): RunningContext 
       paceVsTargetSeconds: window["paceVsTargetSeconds"] as number | undefined,
       heartRateBpm: window["heartRateBpm"] as number | undefined,
       hrTrendBpmPerMin: window["hrTrendBpmPerMin"] as number | undefined,
+      heartRateZonePosition: window["heartRateZonePosition"] as number | undefined,
+      heartRateZoneDelta: window["heartRateZoneDelta"] as number | undefined,
+      consecutiveSecondsAboveHeartRateZone: window["consecutiveSecondsAboveHeartRateZone"] as number | undefined,
       gradePct: window["gradePct"] as number | undefined,
       stoppedOrAutoPaused: window["stoppedOrAutoPaused"] as boolean,
       signalQuality: window["signalQuality"] as RunningContext["window"]["signalQuality"],
@@ -233,12 +248,16 @@ const EFFORT_ACTION_INSTRUCTIONS =
   "`window.hrTrendBpmPerMin` is heart-rate drift per minute across the window; a clearly positive value means rising internal cost. " +
   "`athlete.rpe` is the runner's self-reported effort on a 0-10 scale, higher = harder. " +
   "`safety.mayIncreaseIntensity` false means an intensity increase is not allowed in this state; a hard safety stop or reported symptoms would have blocked this request before it was sent. " +
+  "Judge from `block`, the window fields, `athlete.rpe`, and data reliability (`window.signalQuality`, `window.dataAgeSeconds`). `target.hrZone` is the configured zone range for the block; `window.heartRateZonePosition`, `window.heartRateZoneDelta`, and `window.consecutiveSecondsAboveHeartRateZone` show whether the runner has sustained time above it. Do not diagnose illness. " +
+  "`athlete.rpe` is the runner's self-reported effort on a 0-10 scale, higher = harder. " +
+  "`safety.mayIncreaseIntensity` false means an intensity increase is not allowed in this state; a hard safety stop or reported symptoms would have blocked this request before it was sent. " +
   "Judge from `block`, the window fields, `athlete.rpe`, and data reliability (`window.signalQuality`, `window.dataAgeSeconds`). Do not diagnose illness. " +
   "Choose the conservative action given the evidence; use insufficient_evidence only when the state genuinely lacks the metrics needed for the other options (for example no pace and no heart rate), not merely when the choice is close.";
 
 const EFFORT_DISPROPORTIONATE_INSTRUCTIONS =
   "Is the runner's apparent effort disproportionate to the current workout objective? " +
   "Compare the self-reported effort `athlete.rpe` (0-10, higher = harder) against the observed pace `window.paceSecPerKm` and heart rate `window.heartRateBpm` for the block type `block` and the target pace range `target.paceSecPerKm` when present. " +
+  "Effort is disproportionate when RPE or heart rate is clearly higher than the pace and block justify (for example high `athlete.rpe` with pace at or faster than target, or sustained time above `target.hrZone`), discounting terrain via `window.gradePct` and unreliable data via `window.signalQuality`. Do not diagnose illness.";
   "Effort is disproportionate when RPE or heart rate is clearly higher than the pace and block justify (for example high `athlete.rpe` with pace at or faster than target, or `window.hrTrendBpmPerMin` clearly positive at an easy pace), discounting terrain via `window.gradePct` and unreliable data via `window.signalQuality`. Do not diagnose illness.";
 
 const CONTEXT_EXPLANATION_INSTRUCTIONS =

@@ -5,6 +5,27 @@
 
 import { z } from "zod";
 
+export const heartRateZoneSchema = z.object({
+  zone: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+  minBpm: z.number().positive(),
+  maxBpm: z.number().positive(),
+});
+
+export const heartRateZonesSchema = z.array(heartRateZoneSchema).length(5).superRefine((zones, ctx) => {
+  zones.forEach((zone, index) => {
+    if (zone.zone !== index + 1) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [index, "zone"], message: "Zones must be Z1 to Z5 in order." });
+    }
+    if (zone.minBpm > zone.maxBpm) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [index, "maxBpm"], message: "The maximum must be greater than or equal to the minimum." });
+    }
+    const previous = zones[index - 1];
+    if (previous !== undefined && zone.minBpm !== previous.maxBpm + 1) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [index, "minBpm"], message: "Zones must be contiguous and must not overlap." });
+    }
+  });
+});
+
 export const trainingBlockSchema = z.enum([
   "warmup",
   "easy",
@@ -69,6 +90,11 @@ export const derivedMetricsSchema = z.object({
   historicalPaceDeltaSeconds: z.number().nullable(),
   historicalHrDeltaBpm: z.number().nullable(),
   historyMaturity: historyMaturitySchema,
+  heartRateZonePosition: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6)]).nullable().optional(),
+  targetHeartRateZoneMin: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]).nullable().optional(),
+  targetHeartRateZoneMax: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]).nullable().optional(),
+  heartRateZoneDelta: z.number().nullable().optional(),
+  consecutiveSecondsAboveHeartRateZone: z.number().int().nonnegative().optional(),
 });
 
 export const safetyResultSchema = z.object({

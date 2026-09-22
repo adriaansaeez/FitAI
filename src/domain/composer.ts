@@ -8,6 +8,7 @@ import type {
 } from "./types";
 import { computeDerivedMetrics } from "./metrics";
 import { evaluateSafety as evaluateSafetyPolicy } from "./safety";
+import type { HeartRateZone } from "./heartRateZones";
 import type { DecisionProvider, ProviderResult } from "../services/provider";
 
 export const COMPOSER_REASON_CODES = {
@@ -18,6 +19,7 @@ export const COMPOSER_REASON_CODES = {
   increaseNotEasyBlock: "increase_not_easy_block",
   increaseBlockedBySafety: "increase_blocked_by_safety",
   increaseWithoutTarget: "increase_without_target",
+  increaseAtHeartRateZoneCeiling: "increase_at_heart_rate_zone_ceiling",
   disproportionateEffortRisk: "disproportionate_effort_risk",
   cooldownNoOppositeChange: "cooldown_no_opposite_change",
   recoverReevaluationPending: "recover_reevaluation_pending",
@@ -260,6 +262,10 @@ export function composeDecision(
       }
       proposedAction = "maintain";
       composerSource = "composer";
+    } else if (typeof metrics.heartRateZoneDelta === "number" && metrics.heartRateZoneDelta >= 0) {
+      reasonCodes.push(COMPOSER_REASON_CODES.increaseAtHeartRateZoneCeiling);
+      proposedAction = "maintain";
+      composerSource = "composer";
     } else if (hasDisproportionateRisk(providerResult)) {
       reasonCodes.push(COMPOSER_REASON_CODES.disproportionateEffortRisk);
       proposedAction = "maintain";
@@ -355,6 +361,11 @@ export function buildDecisionContext(
     historicalPaceDeltaSeconds: metrics.historicalPaceDeltaSeconds,
     historicalHrDeltaBpm: metrics.historicalHrDeltaBpm,
     historyMaturity: metrics.historyMaturity,
+    heartRateZonePosition: metrics.heartRateZonePosition,
+    targetHeartRateZoneMin: metrics.targetHeartRateZoneMin,
+    targetHeartRateZoneMax: metrics.targetHeartRateZoneMax,
+    heartRateZoneDelta: metrics.heartRateZoneDelta,
+    consecutiveSecondsAboveHeartRateZone: metrics.consecutiveSecondsAboveHeartRateZone,
     mayIncreaseIntensity: safety.mayIncreaseIntensity,
     safetyReasonCodes: [...safety.reasonCodes],
   };
@@ -370,6 +381,7 @@ export type DecideSecondInput = {
     typicalEasyRpe?: number;
   };
   comparableHistoryCount?: number;
+  heartRateZones?: readonly HeartRateZone[];
   provider?: DecisionProvider;
   previousDecision?: DecisionTrace | null;
 };
@@ -392,6 +404,8 @@ export async function decideSecond(input: DecideSecondInput): Promise<DecisionTr
     targetPaceSecPerKm: input.targetPaceSecPerKm,
     baseline: input.baseline,
     comparableHistoryCount: input.comparableHistoryCount ?? 0,
+    block,
+    heartRateZones: input.heartRateZones,
   });
   const safety = evaluateSafetyPolicy(currentSample, metrics, block);
 
