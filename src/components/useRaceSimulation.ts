@@ -498,7 +498,11 @@ export function useRaceSimulation(): RaceSimulation {
       };
     }
 
-    const callJev = cfg.provider === "jev" && intervalHit;
+    // Jev is called on every evaluated second: interval hits, the forced
+    // first second, and symptom seconds. Non-evaluated seconds are reused
+    // client-side, so Jev is not called more often than before except at
+    // second 1 (which previously composed "provider unavailable").
+    const callJev = cfg.provider === "jev";
     try {
       const data = await decideApi({
         sample,

@@ -9,9 +9,10 @@
  *
  * Provider rules:
  * - Mock mode ("Modo simulación"): the mock may evaluate every second.
- * - Jev mode: the real provider is called only when the client asks for it
- *   (callJev); seconds without a call compose "maintain" and the UI reuses
- *   the previous decision.
+ * - Jev mode: the real provider is called when the client asks for it
+ *   (callJev); seconds without a call fall back to the mock provider, so
+ *   every evaluated second reaches a provider instead of composing
+ *   "provider unavailable" (the UI reuses non-evaluated seconds).
  * - Safety always runs first inside decideSecond; the provider is never
  *   consulted when safety dictates the outcome (e.g. symptoms).
  */
@@ -27,6 +28,7 @@ import {
 import { DEFAULT_HEART_RATE_ZONES } from "../../../domain/heartRateZones";
 import type { DecisionProvider } from "../../../services/provider";
 import { getDecisionProvider, getProviderMode } from "../../../services/providerSelection";
+import { MockDecisionProvider } from "../../../services/mockDecisionProvider";
 
 /** Route-level bound on carried history, per the demo contract. */
 export const MAX_RECENT_SAMPLES = 120;
@@ -95,7 +97,10 @@ export function createDecideHandler(deps: DecideHandlerDeps = {}) {
     const mode = getProviderMode();
     let provider: DecisionProvider | undefined;
     if (mode === "jev") {
-      provider = body.callJev ? (deps.getProvider?.() ?? getDecisionProvider()) : undefined;
+      provider =
+        body.callJev
+          ? (deps.getProvider?.() ?? getDecisionProvider())
+          : (deps.getProvider?.() ?? new MockDecisionProvider());
     } else {
       provider = deps.getProvider?.() ?? defaultGetProvider(mode);
     }
