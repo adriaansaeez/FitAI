@@ -46,8 +46,10 @@ logic — every fix must keep the rendered DOM output byte-identical.
       Render counts reasoned (no render-test lib available): HomePage ~3-4 ->
       ~2 renders/tick, ControlsBar decoupled. 288/288, tsc clean, boot smoke
       OK.
-- [ ] T2 - LiveSimulationPanel: useMemo paceValues/paceDomain/recent/chart
-      data, hoist inline formatters, React.memo the component.
+- [x] T2 - LiveSimulationPanel: paceValues/paceDomain into useMemo, 3 inline
+      recharts formatters hoisted to module consts, component wrapped in
+      React.memo (named fn expression). chartData/recent already memoized.
+      Commit 97e8586. 288/288, tsc clean.
 - [ ] T3 - SynchronizedCharts: React.memo chart frames, hoist formatters,
       memoize decisionSeries and chart JSX on append-only entries.
 - [ ] T4 - DecisionTable + AuditPanel + SummaryCards: React.memo, remove
