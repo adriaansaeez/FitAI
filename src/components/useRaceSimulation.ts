@@ -290,6 +290,10 @@ export function useRaceSimulation(): RaceSimulation {
   const [targetSecond, setTargetSecond] = useState(0);
   const [entries, setEntries] = useState<DecisionEntry[]>([]);
   const [selectedSecond, setSelectedSecond] = useState(0);
+  // Mutable mirror for the follow effect (see below): lets the effect keep its
+  // original [entries]-only dependency while skipping updates that are already
+  // current, without widening its trigger conditions.
+  const selectedSecondRef = useRef(selectedSecond);
   const [apiMode, setApiMode] = useState<"mock" | "jev">("mock");
   const [failureNote, setFailureNote] = useState<string | null>(null);
 
@@ -401,6 +405,7 @@ export function useRaceSimulation(): RaceSimulation {
   const runIdRef = useRef(0);
   const pumpRunningRef = useRef(false);
   const autoFollowRef = useRef(true);
+  selectedSecondRef.current = selectedSecond;
 
   const resetRun = useCallback(() => {
     runIdRef.current += 1;
@@ -576,8 +581,20 @@ export function useRaceSimulation(): RaceSimulation {
           if (runId !== runIdRef.current) {
             return;
           }
-          entriesRef.current = [...entriesRef.current, entry];
-          setEntries(entriesRef.current);
+          const nextEntries = [...entriesRef.current, entry];
+          entriesRef.current = nextEntries;
+          if (autoFollowRef.current) {
+            // Batch the frontier append with the follow selection in the same
+            // synchronous block: React auto-batches both into a single render,
+            // so the follow effect below no longer causes a third render per
+            // tick. entry.second is always the newest entry's second (entries
+            // are appended strictly in order), which is exactly what the
+            // follow effect would set.
+            setEntries(nextEntries);
+            setSelectedSecond(entry.second);
+          } else {
+            setEntries(nextEntries);
+          }
         }
       } finally {
         pumpRunningRef.current = false;
@@ -609,7 +626,10 @@ export function useRaceSimulation(): RaceSimulation {
       return;
     }
     const last = entries[entries.length - 1];
-    if (last !== undefined) {
+    // The pump batches this selection with setEntries when auto-follow is
+    // active; skip the redundant update when the selection already matches
+    // (a same-value setState would otherwise still schedule a render).
+    if (last !== undefined && last.second !== selectedSecondRef.current) {
       setSelectedSecond(last.second);
     }
   }, [entries]);

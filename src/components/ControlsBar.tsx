@@ -10,9 +10,9 @@ import { useState } from "react";
 import {
   JEVI_INTERVAL_OPTIONS,
   SPEED_OPTIONS,
+  type DataSource,
   type JevInterval,
   type ProviderChoice,
-  type RaceSimulation,
   type Speed,
 } from "./useRaceSimulation";
 import {
@@ -22,7 +22,7 @@ import {
   SOURCE_KIND_LABELS,
 } from "./labels";
 import { HISTORY_COUNT_OPTIONS } from "@/simulation/history";
-import { SCENARIO_IDS } from "@/simulation/scenarios";
+import { SCENARIO_IDS, type ScenarioId } from "@/simulation/scenarios";
 import type { HistoryCount } from "@/simulation/history";
 import type { HeartRateZone } from "@/domain/heartRateZones";
 
@@ -45,10 +45,76 @@ function toZoneConfig(drafts: readonly ZoneDraft[]): HeartRateZone[] | null {
 const REAL_DURATION_MIN = 600;
 const REAL_DURATION_MAX = 1800;
 
-export function ControlsBar({ sim }: { sim: RaceSimulation }) {
-  const isRealMode = sim.dataSource === "real";
+/**
+ * Narrowed props: only the simulation values and setters the controls bar
+ * actually reads. Individual props keep stable identities for the stable
+ * setters, so per-tick frontier/selection updates (entries, selectedSecond)
+ * no longer re-render this component.
+ */
+interface ControlsBarProps {
+  apiMode: "mock" | "jev";
+  completed: boolean;
+  dataSource: DataSource;
+  heartRateZones: HeartRateZone[];
+  historyCount: HistoryCount;
+  jevInterval: JevInterval;
+  playing: boolean;
+  policyOn: boolean;
+  provider: ProviderChoice;
+  realDurationOverride: number | null;
+  realSeed: number;
+  restart: () => void;
+  scenarioId: ScenarioId;
+  setDataSource: (source: DataSource) => void;
+  setHeartRateZones: (zones: HeartRateZone[]) => void;
+  setHistoryCount: (count: HistoryCount) => void;
+  setJevInterval: (interval: JevInterval) => void;
+  setPolicyOn: (on: boolean) => void;
+  setProvider: (provider: ProviderChoice) => void;
+  setRealDurationOverride: (duration: number | null) => void;
+  setRealSeed: (seed: number) => void;
+  setScenarioId: (id: ScenarioId) => void;
+  setSpeed: (speed: Speed) => void;
+  speed: Speed;
+  stepOneSecond: () => void;
+  targetSecond: number;
+  togglePlay: () => void;
+  totalSeconds: number;
+}
+
+export function ControlsBar({
+  apiMode,
+  completed,
+  dataSource,
+  heartRateZones,
+  historyCount,
+  jevInterval,
+  playing,
+  policyOn,
+  provider,
+  realDurationOverride,
+  realSeed,
+  restart,
+  scenarioId,
+  setDataSource,
+  setHeartRateZones,
+  setHistoryCount,
+  setJevInterval,
+  setPolicyOn,
+  setProvider,
+  setRealDurationOverride,
+  setRealSeed,
+  setScenarioId,
+  setSpeed,
+  speed,
+  stepOneSecond,
+  targetSecond,
+  togglePlay,
+  totalSeconds,
+}: ControlsBarProps) {
+  const isRealMode = dataSource === "real";
   const [zoneDrafts, setZoneDrafts] = useState<ZoneDraft[]>(() =>
-    sim.heartRateZones.map((zone) => ({ minBpm: String(zone.minBpm), maxBpm: String(zone.maxBpm) })),
+    heartRateZones.map((zone) => ({ minBpm: String(zone.minBpm), maxBpm: String(zone.maxBpm) })),
   );
   const zonesValid = toZoneConfig(zoneDrafts) !== null;
 
@@ -58,7 +124,7 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
         draftIndex === index ? { ...draft, [field]: value } : draft,
       );
       const zones = toZoneConfig(next);
-      if (zones !== null) sim.setHeartRateZones(zones);
+      if (zones !== null) setHeartRateZones(zones);
       return next;
     });
   };
@@ -67,7 +133,7 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
   // when it parses inside [REAL_DURATION_MIN, REAL_DURATION_MAX]; empty means
   // "random but deterministic" (override null).
   const [durationDraft, setDurationDraft] = useState<string>(
-    sim.realDurationOverride === null ? "" : String(sim.realDurationOverride),
+    realDurationOverride === null ? "" : String(realDurationOverride),
   );
   const durationParsed = Number.parseInt(durationDraft.trim(), 10);
   const durationInvalid =
@@ -83,30 +149,30 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
       return; // keep the last committed override while typing
     }
     if (parsed >= REAL_DURATION_MIN && parsed <= REAL_DURATION_MAX) {
-      sim.setRealDurationOverride(parsed);
+      setRealDurationOverride(parsed);
     }
   };
 
   const handleDurationBlur = () => {
     const trimmed = durationDraft.trim();
     if (trimmed === "") {
-      sim.setRealDurationOverride(null);
+      setRealDurationOverride(null);
       setDurationDraft("");
       return;
     }
     const parsed = Number.parseInt(trimmed, 10);
     if (Number.isNaN(parsed)) {
       // Free text: revert to the last committed override.
-      setDurationDraft(sim.realDurationOverride === null ? "" : String(sim.realDurationOverride));
+      setDurationDraft(realDurationOverride === null ? "" : String(realDurationOverride));
       return;
     }
     const clamped = Math.min(REAL_DURATION_MAX, Math.max(REAL_DURATION_MIN, parsed));
-    sim.setRealDurationOverride(clamped);
+    setRealDurationOverride(clamped);
     setDurationDraft(String(clamped));
   };
 
   const modeBadge =
-    sim.apiMode === "jev" ? (
+    apiMode === "jev" ? (
       <span className="badge badge-jev">Jev</span>
     ) : (
       <span className="badge badge-mock">Simulation mode</span>
@@ -118,17 +184,17 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
         <label htmlFor="source-select">Source</label>
         <select
           id="source-select"
-          value={sim.dataSource === "real" ? "real" : sim.scenarioId}
+          value={dataSource === "real" ? "real" : scenarioId}
           onChange={(event) => {
             const value = event.target.value;
             if (value === "real") {
-              sim.setDataSource("real");
+              setDataSource("real");
               return;
             }
             const match = SCENARIO_IDS.find((id) => id === value);
             if (match !== undefined) {
-              sim.setDataSource("synthetic");
-              sim.setScenarioId(match);
+              setDataSource("synthetic");
+              setScenarioId(match);
             }
           }}
         >
@@ -147,13 +213,13 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
         <label htmlFor="scenario-select">Scenario</label>
         <select
           id="scenario-select"
-          value={sim.scenarioId}
+          value={scenarioId}
           disabled={isRealMode}
           onChange={(event) => {
             const value = event.target.value;
             const match = SCENARIO_IDS.find((id) => id === value);
             if (match !== undefined) {
-              sim.setScenarioId(match);
+              setScenarioId(match);
             }
           }}
         >
@@ -169,13 +235,13 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
         <label htmlFor="history-select">History sessions</label>
         <select
           id="history-select"
-          value={sim.historyCount}
+          value={historyCount}
           disabled={isRealMode}
           onChange={(event) => {
             const value = Number(event.target.value);
             const match = HISTORY_COUNT_OPTIONS.find((count) => count === value);
             if (match !== undefined) {
-              sim.setHistoryCount(match as HistoryCount);
+              setHistoryCount(match as HistoryCount);
             }
           }}
         >
@@ -192,11 +258,11 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
         <label htmlFor="provider-select">Provider</label>
         <select
           id="provider-select"
-          value={sim.provider}
+          value={provider}
           onChange={(event) => {
             const value = event.target.value;
             if (value === "mock" || value === "jev") {
-              sim.setProvider(value as ProviderChoice);
+              setProvider(value as ProviderChoice);
             }
           }}
         >
@@ -211,13 +277,13 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
           <input
             id="policy-toggle"
             type="checkbox"
-            checked={sim.policyOn}
-            onChange={(event) => sim.setPolicyOn(event.target.checked)}
+            checked={policyOn}
+            onChange={(event) => setPolicyOn(event.target.checked)}
           />{" "}
-          {sim.policyOn ? "On (guarded)" : "Off (raw)"}
+          {policyOn ? "On (guarded)" : "Off (raw)"}
         </span>
         <p className="note">
-          {sim.policyOn
+          {policyOn
             ? "The composer may veto or correct the provider decision."
             : "Raw mode: the provider decision is accepted as-is. The symptom hard-stop stays active."}
         </p>
@@ -267,12 +333,12 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
         ) : (
           <select
             id="interval-select"
-            value={sim.jevInterval}
+            value={jevInterval}
             onChange={(event) => {
               const value = Number(event.target.value);
               const match = JEVI_INTERVAL_OPTIONS.find((interval) => interval === value);
               if (match !== undefined) {
-                sim.setJevInterval(match as JevInterval);
+                setJevInterval(match as JevInterval);
               }
             }}
           >
@@ -294,11 +360,11 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
               type="number"
               min={0}
               step={1}
-              value={sim.realSeed}
+              value={realSeed}
               onChange={(event) => {
                 const parsed = Number.parseInt(event.target.value, 10);
                 if (!Number.isNaN(parsed)) {
-                  sim.setRealSeed(Math.max(0, parsed));
+                  setRealSeed(Math.max(0, parsed));
                 }
               }}
             />
@@ -331,23 +397,23 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
           Playback
         </span>
         <div className="button-row" role="group" aria-labelledby="playback-label">
-          <button type="button" className="btn" onClick={sim.restart}>
+          <button type="button" className="btn" onClick={restart}>
             Restart
           </button>
           <button
             type="button"
             className="btn"
-            aria-pressed={sim.playing}
-            onClick={sim.togglePlay}
-            disabled={sim.completed && !sim.playing}
+            aria-pressed={playing}
+            onClick={togglePlay}
+            disabled={completed && !playing}
           >
-            {sim.playing ? "Pause" : "Play"}
+            {playing ? "Pause" : "Play"}
           </button>
           <button
             type="button"
             className="btn"
-            onClick={sim.stepOneSecond}
-            disabled={sim.completed}
+            onClick={stepOneSecond}
+            disabled={completed}
           >
             Step 1 s
           </button>
@@ -356,8 +422,8 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
               key={option}
               type="button"
               className="btn btn-speed"
-              aria-pressed={sim.speed === option}
-              onClick={() => sim.setSpeed(option as Speed)}
+              aria-pressed={speed === option}
+              onClick={() => setSpeed(option as Speed)}
             >
               {option}x
             </button>
@@ -369,17 +435,17 @@ export function ControlsBar({ sim }: { sim: RaceSimulation }) {
         <span className="control-label">Status</span>
         <div className="status-row">
           <span className="second-indicator">
-            Second <strong>{sim.targetSecond}</strong> / {sim.totalSeconds}
+            Second <strong>{targetSecond}</strong> / {totalSeconds}
           </span>
           {modeBadge}
         </div>
-        {sim.provider === "jev" ? (
+        {provider === "jev" ? (
           <p className="note">
             The Jev call interval is for demonstration only; it is not
             production cadence.
           </p>
         ) : null}
-        {sim.completed ? <p className="note">Simulation complete.</p> : null}
+        {completed ? <p className="note">Simulation complete.</p> : null}
       </div>
     </section>
   );

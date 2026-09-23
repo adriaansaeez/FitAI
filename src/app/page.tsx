@@ -50,7 +50,38 @@ export default function HomePage() {
         </p>
       </header>
 
-      <ControlsBar sim={sim} />
+      {/* Narrowed props: per-tick frontier/selection updates (entries,
+           selectedSecond) no longer re-render the controls bar. */}
+      <ControlsBar
+        apiMode={sim.apiMode}
+        completed={sim.completed}
+        dataSource={sim.dataSource}
+        heartRateZones={sim.heartRateZones}
+        historyCount={sim.historyCount}
+        jevInterval={sim.jevInterval}
+        playing={sim.playing}
+        policyOn={sim.policyOn}
+        provider={sim.provider}
+        realDurationOverride={sim.realDurationOverride}
+        realSeed={sim.realSeed}
+        restart={sim.restart}
+        scenarioId={sim.scenarioId}
+        setDataSource={sim.setDataSource}
+        setHeartRateZones={sim.setHeartRateZones}
+        setHistoryCount={sim.setHistoryCount}
+        setJevInterval={sim.setJevInterval}
+        setPolicyOn={sim.setPolicyOn}
+        setProvider={sim.setProvider}
+        setRealDurationOverride={sim.setRealDurationOverride}
+        setRealSeed={sim.setRealSeed}
+        setScenarioId={sim.setScenarioId}
+        setSpeed={sim.setSpeed}
+        speed={sim.speed}
+        stepOneSecond={sim.stepOneSecond}
+        targetSecond={sim.targetSecond}
+        togglePlay={sim.togglePlay}
+        totalSeconds={sim.totalSeconds}
+      />
 
       <SummaryCards entry={selectedEntry} sample={selectedSample} />
 
