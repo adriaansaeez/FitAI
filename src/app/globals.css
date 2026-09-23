@@ -699,6 +699,18 @@ input[type="number"] {
   list-style: none;
 }
 
+@keyframes log-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .live-log li {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto;
@@ -763,6 +775,10 @@ input[type="number"] {
 
   .btn:active:not(:disabled) {
     transform: translateY(1px);
+  }
+
+  .live-log li {
+    animation: log-row-in 220ms ease-out;
   }
 }
 
