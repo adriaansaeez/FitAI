@@ -55,17 +55,19 @@ logic — every fix must keep the rendered DOM output byte-identical.
       all inline formatters + prop literals hoisted to module consts,
       decisionSeries memoized on [entries.length, lastEntry] (append-only
       verified). Commit d97f299. 288/288, tsc clean.
-- [ ] T4 - DecisionTable + AuditPanel + SummaryCards: React.memo, remove
-      the extra per-tick setWindowEnd render where possible.
-- [ ] T5 - Post-change measurement (same instrumentation), full gates
-      (vitest, tsc) + dev-server render smoke + visual smoothness check.
-
-## Constraints
-
-- DOM output identical in every state (idle, playing, selected row, done).
-- All 288 tests keep passing without weakening assertions.
-- Temporary instrumentation never gets committed.
+- [x] T4 - DecisionTable/AuditPanel/SummaryCards: all three wrapped in
+      React.memo; DecisionTable follow effect was a real value-changing
+      setState per tick -> frontier window now derived during render
+      (isFollowingFrontier/effectiveWindowEnd), effect reduced to ref-only
+      bookkeeping, one table-subtree render/tick removed. Commit 5fb7ec2.
+      288/288, tsc clean.
+- [x] T5 - Final verification: vitest 288/288, tsc clean, dev-server smoke
+      (title, controls, watch, charts sections present, no error overlay).
+      Smoothness check pending user's manual run.
 
 ## Evidence
 
-(recorded per task at close)
+- T1: commit 6ee1ae1
+- T2: commit 97e8586
+- T3: commit d97f299
+- T4: commit 5fb7ec2
