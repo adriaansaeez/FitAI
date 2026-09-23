@@ -3,7 +3,7 @@
 /**
  * Single-page demo screen for the simulated Jev race.
  *
- * Composition: controls -> status notes -> summary cards -> synchronized
+ * Composition: controls -> summary cards -> watch panel -> status notes -> synchronized
  * charts -> decision table -> audit panel. All decision evaluation happens
  * server-side via POST /api/decide; the API key never reaches the client.
  */
@@ -52,6 +52,8 @@ export default function HomePage() {
 
       <ControlsBar sim={sim} />
 
+      <SummaryCards entry={selectedEntry} sample={selectedSample} />
+
       <LiveSimulationPanel
         entries={sim.entries}
         samples={sim.samples}
@@ -79,8 +81,6 @@ export default function HomePage() {
       {sim.historyCount === 0 ? (
         <p className="banner banner-info">No personal reference; limited confidence.</p>
       ) : null}
-
-      <SummaryCards entry={selectedEntry} sample={selectedSample} />
 
       <SynchronizedCharts
         samples={sim.samples}
