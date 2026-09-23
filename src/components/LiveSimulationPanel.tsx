@@ -11,7 +11,7 @@ import {
   IconPlayerStop,
   IconRun,
 } from "@tabler/icons-react";
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import {
   Area,
   CartesianGrid,
@@ -65,6 +65,13 @@ function ActionIcon({ action, size = 22 }: { action: DecisionAction; size?: numb
   }
 }
 
+const formatPaceTick = (value: number): string => formatSecondTick(value);
+const formatPaceTooltip = (value: unknown): [string, string] => [
+  formatPace(typeof value === "number" ? value : null),
+  "Pace",
+];
+const formatSecondTooltipLabel = (label: unknown): string => `Second ${String(label)}`;
+
 function decisionMarker(props: unknown) {
   const { cx, cy } = (props ?? {}) as { cx?: number; cy?: number };
   if (cx === undefined || cy === undefined) return <g />;
@@ -75,7 +82,7 @@ export function latestEvaluations(entries: readonly DecisionEntry[]): DecisionEn
   return entries.filter((entry) => !entry.reused).slice(-5).reverse();
 }
 
-export function LiveSimulationPanel({
+export const LiveSimulationPanel = memo(function LiveSimulationPanel({
   entries,
   samples,
   targetPaceSecPerKm,
@@ -104,13 +111,18 @@ export function LiveSimulationPanel({
   }, [entries, liveSecond, samples]);
 
   const recent = useMemo(() => latestEvaluations(entries), [entries]);
-  const paceValues = chartData
-    .map((point) => point.pace)
-    .filter((pace): pace is number => pace !== null);
-  const paceDomain: [number, number] =
-    paceValues.length === 0
-      ? [280, 380]
-      : [Math.max(60, Math.min(...paceValues) - 10), Math.max(...paceValues) + 10];
+  const paceValues = useMemo(
+    () =>
+      chartData.map((point) => point.pace).filter((pace): pace is number => pace !== null),
+    [chartData],
+  );
+  const paceDomain = useMemo<[number, number]>(
+    () =>
+      paceValues.length === 0
+        ? [280, 380]
+        : [Math.max(60, Math.min(...paceValues) - 10), Math.max(...paceValues) + 10],
+    [paceValues],
+  );
 
   return (
     <section className="live-panel" aria-label="Real-time simulation">
@@ -150,10 +162,10 @@ export function LiveSimulationPanel({
             <ComposedChart data={chartData} margin={{ top: 12, right: 12, bottom: 0, left: 0 }}>
               <CartesianGrid stroke="#f2f2f0" vertical={false} />
               <XAxis dataKey="second" tick={{ fontSize: 11, fill: "#43423f" }} tickFormatter={formatSecondTick} />
-              <YAxis domain={paceDomain} width={42} tick={{ fontSize: 11, fill: "#43423f" }} tickFormatter={(value: number) => formatSecondTick(value)} />
+              <YAxis domain={paceDomain} width={42} tick={{ fontSize: 11, fill: "#43423f" }} tickFormatter={formatPaceTick} />
               <Tooltip
-                labelFormatter={(label) => `Second ${String(label)}`}
-                formatter={(value) => [formatPace(typeof value === "number" ? value : null), "Pace"]}
+                labelFormatter={formatSecondTooltipLabel}
+                formatter={formatPaceTooltip}
               />
               {targetPaceSecPerKm !== null ? (
                 <ReferenceArea y1={targetPaceSecPerKm.min} y2={targetPaceSecPerKm.max} fill="#fc5200" fillOpacity={0.1} />
@@ -191,4 +203,4 @@ export function LiveSimulationPanel({
       </div>
     </section>
   );
-}
+});
