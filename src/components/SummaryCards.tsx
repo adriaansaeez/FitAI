@@ -6,6 +6,8 @@
  * Values come from the selected decision trace.
  */
 
+import { memo } from "react";
+
 import type { RunningSample } from "@/domain/types";
 import type { DecisionEntry } from "./useRaceSimulation";
 import { heartRateZoneLabel } from "@/domain/heartRateZones";
@@ -20,7 +22,10 @@ import {
   SIGNAL_QUALITY_LABELS,
 } from "./labels";
 
-export function SummaryCards({
+// Memoized: entry/sample keep their identity across page renders that don't
+// touch the selection (e.g. the per-tick targetSecond ticker render), so the
+// subtree is skipped. Rendered output is unchanged.
+export const SummaryCards = memo(function SummaryCards({
   entry,
   sample,
 }: {
@@ -83,4 +88,4 @@ export function SummaryCards({
       </div>
     </section>
   );
-}
+});

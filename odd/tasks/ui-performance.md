@@ -50,8 +50,11 @@ logic — every fix must keep the rendered DOM output byte-identical.
       recharts formatters hoisted to module consts, component wrapped in
       React.memo (named fn expression). chartData/recent already memoized.
       Commit 97e8586. 288/288, tsc clean.
-- [ ] T3 - SynchronizedCharts: React.memo chart frames, hoist formatters,
-      memoize decisionSeries and chart JSX on append-only entries.
+- [x] T3 - SynchronizedCharts: 6 chart bodies extracted into React.memo
+      components (only selectedSecond changes per tick), ChartFrame memoized,
+      all inline formatters + prop literals hoisted to module consts,
+      decisionSeries memoized on [entries.length, lastEntry] (append-only
+      verified). Commit d97f299. 288/288, tsc clean.
 - [ ] T4 - DecisionTable + AuditPanel + SummaryCards: React.memo, remove
       the extra per-tick setWindowEnd render where possible.
 - [ ] T5 - Post-change measurement (same instrumentation), full gates

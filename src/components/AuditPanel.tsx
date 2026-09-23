@@ -7,6 +7,8 @@
  * card (spec: real-race validation, item 6).
  */
 
+import { memo } from "react";
+
 import type { AthleteBaseline } from "@/domain/metrics";
 import type { RaceDecisionEvaluation } from "@/domain/evaluation";
 import type { RunningSample } from "@/domain/types";
@@ -149,7 +151,11 @@ function RealOriginCard({ realWindow }: { realWindow: RealRaceWindowPayload }) {
   );
 }
 
-export function AuditPanel({
+// Memoized: the panel's props (selection, baseline, data source, real window,
+// evaluation) keep their identity across page renders that don't touch the
+// selection (e.g. the per-tick targetSecond ticker render), so the subtree is
+// skipped. Rendered output is unchanged.
+export const AuditPanel = memo(function AuditPanel({
   entry,
   sample,
   baseline: _baseline,
@@ -308,4 +314,4 @@ export function AuditPanel({
       </div>
     </section>
   );
-}
+});

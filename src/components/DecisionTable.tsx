@@ -5,7 +5,7 @@
  * 600-second run). Clicking a row syncs the charts and opens the audit panel.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { RunningSample } from "@/domain/types";
 import type { DecisionEntry } from "./useRaceSimulation";
 import {
@@ -20,7 +20,7 @@ import {
 
 const WINDOW_SIZE = 60;
 
-export function DecisionTable({
+export const DecisionTable = memo(function DecisionTable({
   entries,
   samples,
   selectedSecond,
@@ -34,13 +34,14 @@ export function DecisionTable({
   const [windowEnd, setWindowEnd] = useState(WINDOW_SIZE);
   const prevEntryCountRef = useRef(0);
 
-  // Follow the frontier while the user is watching the latest window.
+  // Follow the frontier while the user is watching the latest window. The
+  // effect only records the entry count the last committed render saw; the
+  // following window itself is derived during render (see below), so a per-tick
+  // frontier change no longer needs a follow-up state update (and its extra
+  // render of this subtree).
   useEffect(() => {
-    if (windowEnd >= prevEntryCountRef.current) {
-      setWindowEnd(entries.length);
-    }
     prevEntryCountRef.current = entries.length;
-  }, [entries.length, windowEnd]);
+  }, [entries.length]);
 
   if (entries.length === 0) {
     return (
@@ -50,8 +51,16 @@ export function DecisionTable({
     );
   }
 
-  const start = Math.max(0, Math.min(windowEnd - WINDOW_SIZE, entries.length - 1));
-  const end = Math.min(windowEnd, entries.length);
+  // Same follow-the-frontier condition the previous effect applied (the pinned
+  // windowEnd has not fallen behind the frontier), derived during render so the
+  // window already includes the newest entries in the tick's own commit without
+  // a second render pass. Reading the ref here is safe: it is only written
+  // post-commit by the effect above.
+  const isFollowingFrontier = windowEnd >= prevEntryCountRef.current;
+  const effectiveWindowEnd = isFollowingFrontier ? entries.length : windowEnd;
+
+  const start = Math.max(0, Math.min(effectiveWindowEnd - WINDOW_SIZE, entries.length - 1));
+  const end = Math.min(effectiveWindowEnd, entries.length);
   const visible = entries.slice(start, end);
 
   return (
@@ -62,7 +71,7 @@ export function DecisionTable({
           <button
             type="button"
             className="btn"
-            onClick={() => setWindowEnd((current) => Math.max(WINDOW_SIZE, current - WINDOW_SIZE))}
+            onClick={() => setWindowEnd(Math.max(WINDOW_SIZE, effectiveWindowEnd - WINDOW_SIZE))}
             disabled={start === 0}
           >
             ← Previous
@@ -73,7 +82,7 @@ export function DecisionTable({
           <button
             type="button"
             className="btn"
-            onClick={() => setWindowEnd((current) => Math.min(entries.length, current + WINDOW_SIZE))}
+            onClick={() => setWindowEnd(Math.min(entries.length, effectiveWindowEnd + WINDOW_SIZE))}
             disabled={end >= entries.length}
           >
             Next →
@@ -130,4 +139,4 @@ export function DecisionTable({
       <p className="note">↻ marks a decision reused from the previous second.</p>
     </section>
   );
-}
+});
