@@ -1,9 +1,37 @@
 # FitAI — Simulated Race Demo with Jev
 
+![FitAI](docs/logo.png)
+
 A local, self-contained web demo: a simulated 10-minute (600-second) run,
 second by second, showing how **Jev** (TypeSafe System One) interprets the
 athlete's training state to decide between *increase gently*, *maintain*,
 *decrease gently*, *recover*, *insufficient data*, and *stop and escalate*.
+
+## Cómo funciona (resumen en español)
+
+FitAI simula una carrera de **10 minutos, segundo a segundo**. En cada segundo
+se generan métricas ficticias (ritmo, pulsaciones, RPE, calidad de señal) a
+partir de un escenario con semilla fija, y una política de seguridad decide si
+es seguro pedir una recomendación:
+
+1. **Generación de métricas** — `src/simulation` crea la ruta, el histórico del
+   atleta y las muestras por segundo de forma determinista (misma semilla →
+   misma carrera).
+2. **Seguridad primero** — `src/domain/safety.ts` bloquea cualquier incremento
+   si hay un síntoma reportado, señal degradada, cooldown activo o datos
+   insuficientes. Un síntoma **nunca** llega al modelo.
+3. **Decisión** — si la seguridad lo permite, `POST /api/decide` consulta al
+   proveedor: **Jev** (TypeSafe, solo en el servidor con `TYPESAFE_API_KEY`) o
+   el **MockProvider** determinista si no hay clave. Ambos devuelven una
+   decisión tipada (`increase_gently`, `maintain`, `decrease_gently`,
+   `recover`, `insufficient_data`, `stop_and_escalate`) — nunca texto libre.
+4. **Composición del mensaje** — `src/domain/composer.ts` combina seguridad +
+   decisión + confianza y la UI lo muestra con plantillas fijas en español.
+
+**Para ejecutarla:** `npm install && npm run dev` y abrir
+`http://localhost:3000`. Sin `TYPESAFE_API_KEY` funciona igual en modo
+simulación (badge "Modo simulación"); con la clave en tu `.env.local` se usan
+las decisiones reales de Jev. La clave vive solo en el servidor.
 
 ## Medical-safety disclaimer
 
